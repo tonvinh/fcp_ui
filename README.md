@@ -7,7 +7,7 @@ FCP là nền tảng quản lý danh mục sản phẩm, cấu hình thông số
 
 ## 🎥 Video Demo Thao tác Hệ thống
 Để xem toàn bộ video thao tác thực tế và mô phỏng các tính năng chính của hệ thống, vui lòng mở tài liệu báo cáo:
-👉 **[Walkthrough Demo Recording (WebP)](./walkthrough_report.md)**
+👉 **[Walkthrough Demo Recording (WebP)](./docs/walkthrough_report.md)**
 
 ---
 
