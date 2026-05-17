@@ -101,7 +101,7 @@ export const PricingPolicyDetail: React.FC = () => {
           </div>
           <div className="flex items-center gap-2 ml-12 md:ml-0">
             <Button variant="outline" icon={Copy} size="sm">Sao chép</Button>
-            <Button variant="primary" icon={Edit} size="sm">Chỉnh sửa</Button>
+            <Button variant="primary" icon={Edit} size="sm" onClick={() => navigate(`/pricing-policies/edit/${policyDetails.id}`)}>Chỉnh sửa</Button>
           </div>
         </div>
       </div>
@@ -162,7 +162,7 @@ export const PricingPolicyDetail: React.FC = () => {
           </div>
           <div className="flex items-center gap-2">
             <Badge variant="info" className="px-3">{policyDetails.priceConfigs.length} Cấu hình</Badge>
-            <Button variant="outline" size="sm" icon={Edit}>Sửa giá</Button>
+            <Button variant="outline" size="sm" icon={Edit} onClick={() => navigate(`/pricing-policies/edit/${policyDetails.id}`)}>Sửa giá</Button>
           </div>
         </div>
 

@@ -95,8 +95,29 @@ interface PriceConfig {
 }
 
 // ─── Main Component ────────────────────────────────────────────────────────────
-export const PricingPolicyGia: React.FC = () => {
-  const [configs, setConfigs] = useState<PriceConfig[]>([]);
+export const PricingPolicyGia: React.FC<{ policy?: any }> = ({ policy }) => {
+  const [configs, setConfigs] = useState<PriceConfig[]>(() => {
+    if (policy) {
+      return [
+        {
+          id: 'config_1',
+          name: 'Cấu hình giá #1',
+          scopeIds: ['all'],
+          productIds: policy.appliedProducts.map((p: any) => {
+            const low = p.toLowerCase();
+            if (low === 'giga') return 'giga';
+            if (low === 'sky') return 'sky';
+            if (low === 'meta') return 'meta';
+            if (low.includes('combo')) return 'combo_sky';
+            return 'giga';
+          }),
+          note: 'Không áp dụng chung với các chương trình khuyến mãi Tivi khác.',
+          isExpanded: true
+        }
+      ];
+    }
+    return [];
+  });
 
   const addConfig = () => {
     const idx = configs.length + 1;

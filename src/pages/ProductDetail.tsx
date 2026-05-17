@@ -123,7 +123,7 @@ export const ProductDetail: React.FC = () => {
           </div>
           <div className="flex items-center gap-2 ml-12 md:ml-0">
             <Button variant="outline" icon={Copy} size="sm">Sao chép</Button>
-            <Button variant="primary" icon={Edit} size="sm">Chỉnh sửa</Button>
+            <Button variant="primary" icon={Edit} size="sm" onClick={() => navigate(`/edit/${productDetails.id}`)}>Chỉnh sửa</Button>
           </div>
         </div>
       </div>
@@ -131,7 +131,7 @@ export const ProductDetail: React.FC = () => {
       {/* Basic info & classification */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {sectionHeader(<Info className="w-4 h-4 text-blue-600" />, 'Thông tin cơ bản & Phân loại', 'bg-blue-50',
-          <Button variant="outline" size="sm" icon={Edit} onClick={() => {}}>Sửa</Button>
+          <Button variant="outline" size="sm" icon={Edit} onClick={() => navigate(`/edit/${productDetails.id}`)}>Sửa</Button>
         )}
         <div className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
           <div className="lg:col-span-7 space-y-5">
@@ -189,7 +189,7 @@ export const ProductDetail: React.FC = () => {
       {/* Service specs */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {sectionHeader(<Box className="w-4 h-4 text-emerald-600" />, 'Đặc tả dịch vụ', 'bg-emerald-50',
-          <Button variant="outline" size="sm" icon={Edit}>Sửa đặc tả</Button>
+          <Button variant="outline" size="sm" icon={Edit} onClick={() => navigate(`/edit/${productDetails.id}`)}>Sửa đặc tả</Button>
         )}
         <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-5">
           {[
@@ -248,7 +248,7 @@ export const ProductDetail: React.FC = () => {
       {/* Devices */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {sectionHeader(<Package className="w-4 h-4 text-rose-600" />, 'Thiết bị kèm theo', 'bg-rose-50',
-          <Button variant="outline" size="sm" icon={Edit}>Sửa thiết bị</Button>
+          <Button variant="outline" size="sm" icon={Edit} onClick={() => navigate(`/edit/${productDetails.id}`)}>Sửa thiết bị</Button>
         )}
         <div className="p-6">
           <div className="border border-slate-200 rounded-xl overflow-hidden">
@@ -314,7 +314,7 @@ export const ProductDetail: React.FC = () => {
           'bg-indigo-50',
           <div className="flex items-center gap-2">
             <Badge variant="info" className="px-3">{productDetails.priceConfigs.length} Cấu hình</Badge>
-            <Button variant="outline" size="sm" icon={Edit}>Sửa giá</Button>
+            <Button variant="outline" size="sm" icon={Edit} onClick={() => navigate(`/edit/${productDetails.id}`)}>Sửa giá</Button>
           </div>
         )}
 

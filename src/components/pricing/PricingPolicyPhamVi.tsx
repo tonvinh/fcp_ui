@@ -9,11 +9,18 @@ interface ScopeConfig {
   name: string;
 }
 
-export const PricingPolicyPhamVi: React.FC = () => {
+export const PricingPolicyPhamVi: React.FC<{ policy?: any }> = ({ policy }) => {
   const [saveAsTemplate, setSaveAsTemplate] = useState(false);
-  const [scopes, setScopes] = useState<ScopeConfig[]>([
-    { id: 'scope_1', name: 'Phạm vi: Toàn quốc' }
-  ]);
+  const [scopes, setScopes] = useState<ScopeConfig[]>(() => {
+    if (policy) {
+      return [
+        { id: 'scope_1', name: 'Phạm vi: ' + policy.scope }
+      ];
+    }
+    return [
+      { id: 'scope_1', name: 'Phạm vi: Toàn quốc' }
+    ];
+  });
   const [activeScopeId, setActiveScopeId] = useState<string>('scope_1');
 
   const addScope = () => {

@@ -128,22 +128,22 @@ const PAYMENT_METHODS = ['Tiền mặt COD', 'Tiền mặt', 'VNPay-QR', 'FoxPay
 const SERVICES = ['Internet', 'FPT Play', 'Camera'];
 const CUST_CATEGORIES = ['KH mới', 'KH cũ', 'KH chuyển đổi'];
 
-export const PricingPolicyThongTinChung: React.FC = () => {
+export const PricingPolicyThongTinChung: React.FC<{ policy?: any }> = ({ policy }) => {
   // Form State
   const [formData, setFormData] = useState({
-    code: 'INT.2212166',
-    name: 'Chính sách nền Giga, Sky, Meta',
-    dateFrom: '2022-12-01',
-    dateTo: '',
+    code: policy?.code || 'INT.2212166',
+    name: policy?.name || 'Chính sách nền Giga, Sky, Meta',
+    dateFrom: policy ? policy.effectiveFrom.split('/').reverse().join('-') : '2022-12-01',
+    dateTo: policy && policy.effectiveTo ? policy.effectiveTo.split('/').reverse().join('-') : '',
     custCategories: ['KH mới'],
-    comboType: 'Only',
-    services: ['Internet'],
+    comboType: policy?.appliedProducts.some((p: any) => p.includes('Combo')) ? 'Combo' : 'Only',
+    services: policy ? (policy.appliedProducts.some((p: any) => p.includes('Combo')) ? ['Internet', 'FPT Play'] : ['Internet']) : ['Internet'],
     createdFrom: '',
     policyClass: 'CS chung',
     crossSell: 'Có',
     minPayment: '',
     minPaymentUnit: '%',
-    additionalInfo: ''
+    additionalInfo: policy ? 'Chính sách giá áp dụng cho khách hàng cá nhân đăng ký mới dịch vụ Internet trong tháng 5.' : ''
   });
 
   const updateField = (field: string, value: any) => {
@@ -151,9 +151,9 @@ export const PricingPolicyThongTinChung: React.FC = () => {
   };
 
   // Right Column State
-  const [selectedCustTypes, setSelectedCustTypes] = useState<string[]>(['Doanh nghiệp (Tổ chức/Hộ kinh doanh)', 'Cơ quan nhà nước']);
+  const [selectedCustTypes, setSelectedCustTypes] = useState<string[]>(policy ? ['Cá nhân', 'Hộ gia đình', 'Sinh viên'] : ['Doanh nghiệp (Tổ chức/Hộ kinh doanh)', 'Cơ quan nhà nước']);
   const [selectedTargets, setSelectedTargets] = useState<string[]>(CUSTOMER_TARGETS);
-  const [selectedChannels, setSelectedChannels] = useState<string[]>(CHANNELS);
+  const [selectedChannels, setSelectedChannels] = useState<string[]>(policy ? ['Tất cả các kênh'] : CHANNELS);
   const [selectedSalesUnits, setSelectedSalesUnits] = useState<string[]>(SALES_UNITS.slice(0, 12));
   const [selectedPayments, setSelectedPayments] = useState<string[]>(PAYMENT_METHODS);
 

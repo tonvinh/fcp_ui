@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Save, FileUp, CheckCircle2 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -7,15 +7,60 @@ import { TabGia } from '../components/product/TabGia';
 import { TabThietBiKemTheo } from '../components/product/TabThietBiKemTheo';
 import { PricingPolicyPhamVi } from '../components/pricing/PricingPolicyPhamVi';
 import { cn } from '../lib/utils';
+import { mockProducts } from '../mockData/products';
 
 export const CreateProduct: React.FC = () => {
   const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const isEditMode = !!id;
+
   const [serviceOption, setServiceOption] = useState<string>('');
   const [activeTab, setActiveTab] = useState<string>('ThongTinChung');
   const [cloudDays, setCloudDays] = useState<string>('3 ngày');
   const [shortName, setShortName] = useState<string>('');
+  const [longName, setLongName] = useState<string>('');
+  const [shortDesc, setShortDesc] = useState<string>('');
+  const [longDesc, setLongDesc] = useState<string>('');
+  const [seoTitle, setSeoTitle] = useState<string>('');
+  const [seoDesc, setSeoDesc] = useState<string>('');
+  const [seoKeywords, setSeoKeywords] = useState<string>('');
+  const [seoSlug, setSeoSlug] = useState<string>('');
+
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (id) {
+      const found = mockProducts.find(p => p.id === id);
+      if (found) {
+        setShortName(found.name);
+        setLongName(found.name + ' - Phiên bản cao cấp FPT Telecom');
+        if (found.service === 'Internet') {
+          setServiceOption('Internet only');
+        } else if (found.service === 'FPT Play') {
+          setServiceOption('FPT Play Only');
+        } else if (found.service === 'Camera') {
+          setServiceOption('Camera');
+        } else {
+          setServiceOption('Combo Internet FPT Play Camera');
+        }
+        setShortDesc('Gói cước ' + found.name + ' tốc độ cao và nhiều ưu đãi khuyến mãi.');
+        setLongDesc('Gói cước cung cấp chất lượng đường truyền cực kỳ ổn định, bảo mật tối đa, công nghệ hiện đại bậc nhất của FPT Telecom.');
+        setSeoTitle(found.name + ' FPT | Đăng ký ngay');
+        setSeoKeywords(found.subService.join(', '));
+        setSeoSlug(found.code.toLowerCase());
+      } else if (id === 'PRD-001' || id === 'CB-INT-FPT-CAM-2026') {
+        setShortName('Combo Internet + FPT Play + Camera (Giga)');
+        setLongName('Combo Internet + FPT Play + Camera (Giga) - Trọn gói dịch vụ gia đình');
+        setServiceOption('Combo Internet FPT Play Camera');
+        setShortDesc('Gói Combo toàn diện: Internet tốc độ cao, truyền hình giải trí FPT Play và giải pháp an ninh Camera.');
+        setLongDesc('Gói Combo cung cấp giải pháp toàn diện cho hộ gia đình hiện đại. Bao gồm đường truyền Internet cáp quang tốc độ cao (Giga), tài khoản truyền hình FPT Play gói MAX xem trên 3 thiết bị đồng thời, và 1 Camera trong nhà chuẩn hình ảnh 1080p.');
+        setSeoTitle('Combo Internet Truyền Hình Camera FPT | Đăng ký ngay');
+        setSeoKeywords('combo internet camera, fpt play, lắp mạng fpt');
+        setSeoSlug('combo-internet-fpt-play-camera-giga');
+      }
+    }
+  }, [id]);
 
   const defaultTabs = [
     { id: 'ThongTinChung', label: 'Thông tin chung' },
@@ -69,7 +114,7 @@ export const CreateProduct: React.FC = () => {
                 onChange={(e) => setShortName(e.target.value)}
                 error={errors.shortName}
               />
-              <Input label="Tên dài" placeholder="Nhập tên dài..." />
+              <Input label="Tên dài" placeholder="Nhập tên dài..." value={longName} onChange={e => setLongName(e.target.value)} />
             </div>
 
             <div className="space-y-1.5">
@@ -78,7 +123,7 @@ export const CreateProduct: React.FC = () => {
                 <div className="bg-slate-50 border-b px-3 py-1.5 flex gap-1">
                   {['B', 'I', 'U'].map(f => <button key={f} className="px-2 py-0.5 text-xs font-bold hover:bg-slate-200 rounded transition-colors text-slate-600">{f}</button>)}
                 </div>
-                <textarea placeholder="Nhập mô tả ngắn..." className="w-full h-28 p-3 focus:outline-none resize-none text-sm text-slate-700" />
+                <textarea placeholder="Nhập mô tả ngắn..." className="w-full h-28 p-3 focus:outline-none resize-none text-sm text-slate-700" value={shortDesc} onChange={e => setShortDesc(e.target.value)} />
               </div>
             </div>
 
@@ -90,7 +135,7 @@ export const CreateProduct: React.FC = () => {
                   <span className="w-px h-4 bg-slate-300 mx-1.5 my-auto" />
                   {['Heading 1', 'Heading 2'].map(h => <button key={h} className="px-2 py-0.5 text-xs hover:bg-slate-200 rounded transition-colors text-slate-600">{h}</button>)}
                 </div>
-                <textarea placeholder="Nhập mô tả dài chi tiết..." className="w-full h-52 p-3 focus:outline-none resize-none text-sm text-slate-700" />
+                <textarea placeholder="Nhập mô tả dài chi tiết..." className="w-full h-52 p-3 focus:outline-none resize-none text-sm text-slate-700" value={longDesc} onChange={e => setLongDesc(e.target.value)} />
               </div>
             </div>
 
@@ -123,13 +168,13 @@ export const CreateProduct: React.FC = () => {
       case 'MetaData':
         return (
           <div className="space-y-5 max-w-3xl">
-            <Input label="Tiêu đề (Title)" placeholder="SEO Title..." />
+            <Input label="Tiêu đề (Title)" placeholder="SEO Title..." value={seoTitle} onChange={e => setSeoTitle(e.target.value)} />
             <div className="space-y-1.5">
               <label className="block text-sm font-medium text-slate-700">Mô tả (Description)</label>
-              <textarea className="w-full flex min-h-[100px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-fpt-orange/30 focus:border-fpt-orange" placeholder="SEO Description..." />
+              <textarea className="w-full flex min-h-[100px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-fpt-orange/30 focus:border-fpt-orange" placeholder="SEO Description..." value={seoDesc} onChange={e => setSeoDesc(e.target.value)} />
             </div>
-            <Input label="Từ khóa (Keywords)" placeholder="Nhập từ khóa, cách nhau dấu phẩy..." />
-            <Input label="Đường dẫn (Slug)" placeholder="duong-dan-san-pham" />
+            <Input label="Từ khóa (Keywords)" placeholder="Nhập từ khóa, cách nhau dấu phẩy..." value={seoKeywords} onChange={e => setSeoKeywords(e.target.value)} />
+            <Input label="Đường dẫn (Slug)" placeholder="duong-dan-san-pham" value={seoSlug} onChange={e => setSeoSlug(e.target.value)} />
           </div>
         );
 
@@ -293,7 +338,7 @@ export const CreateProduct: React.FC = () => {
       {saveStatus === 'saved' && (
         <div className="fixed top-20 right-6 z-50 flex items-center gap-3 bg-emerald-600 text-white px-5 py-3 rounded-xl shadow-xl animate-in fade-in slide-in-from-top-2">
           <CheckCircle2 className="w-5 h-5 shrink-0" />
-          <span className="font-semibold text-sm">Lưu sản phẩm thành công!</span>
+          <span className="font-semibold text-sm">{isEditMode ? 'Cập nhật sản phẩm thành công!' : 'Lưu sản phẩm thành công!'}</span>
         </div>
       )}
       {saveStatus === 'saving' && (
@@ -311,7 +356,10 @@ export const CreateProduct: React.FC = () => {
           <ArrowLeft className="w-4 h-4 text-slate-600" />
         </button>
         <div>
-          <h1 className="text-xl font-bold text-slate-800 leading-tight">{shortName || 'Tạo Sản phẩm mới'}</h1>
+          <h1 className="text-xl font-bold text-slate-800 leading-tight">
+            {isEditMode ? 'Chỉnh sửa Sản phẩm' : 'Tạo Sản phẩm mới'}
+            {shortName && <span className="text-slate-400 font-normal ml-2">({shortName})</span>}
+          </h1>
           <p className="text-sm text-slate-500 mt-0.5">Cấu hình thông tin, metadata và thông số dịch vụ</p>
         </div>
       </div>
@@ -366,7 +414,7 @@ export const CreateProduct: React.FC = () => {
         {/* Footer */}
         <div className="px-7 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end">
           <Button variant="primary" icon={Save} size="lg" onClick={handleSave} isLoading={saveStatus === 'saving'}>
-            {saveStatus === 'saved' ? 'Đã lưu!' : 'Lưu sản phẩm'}
+            {saveStatus === 'saved' ? 'Đã lưu!' : isEditMode ? 'Cập nhật sản phẩm' : 'Lưu sản phẩm'}
           </Button>
         </div>
       </div>

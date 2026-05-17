@@ -97,7 +97,7 @@ export const ProductTable: React.FC<ProductTableProps> = ({ products }) => {
                       <button onClick={() => navigate(`/detail/${product.id}`)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors" title="Xem">
                         <Eye className="w-4 h-4" />
                       </button>
-                      <button className="p-1.5 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-md transition-colors" title="Sửa">
+                      <button onClick={() => navigate(`/edit/${product.id}`)} className="p-1.5 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-md transition-colors" title="Sửa">
                         <Edit className="w-4 h-4" />
                       </button>
                       <button className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors" title="Xóa">

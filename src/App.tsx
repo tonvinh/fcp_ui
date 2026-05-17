@@ -23,9 +23,11 @@ function App() {
           <Routes>
             <Route path="/" element={<ProductList />} />
             <Route path="/create" element={<CreateProduct />} />
+            <Route path="/edit/:id" element={<CreateProduct />} />
             <Route path="/detail/:id" element={<ProductDetail />} />
             <Route path="/pricing-policies" element={<PricingPolicyList />} />
             <Route path="/pricing-policies/create" element={<CreatePricingPolicy />} />
+            <Route path="/pricing-policies/edit/:id" element={<CreatePricingPolicy />} />
             <Route path="/pricing-policies/:id" element={<PricingPolicyDetail />} />
             <Route path="/settings/price-allocation" element={<ServicePriceAllocation />} />
             <Route path="*" element={<NotFound />} />

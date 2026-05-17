@@ -93,6 +93,7 @@ export const PricingPolicyTable: React.FC<PricingPolicyTableProps> = ({ policies
                       <Eye className="w-4 h-4" />
                     </button>
                     <button
+                      onClick={() => navigate(`/pricing-policies/edit/${policy.id}`)}
                       className="p-1.5 rounded-lg text-slate-400 hover:text-fpt-orange hover:bg-orange-50 transition-colors"
                       title="Chỉnh sửa"
                     >

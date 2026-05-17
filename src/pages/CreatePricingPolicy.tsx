@@ -2,10 +2,11 @@ import React, { useState, Component } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
 import { ArrowLeft, Save, Send, CheckCircle2 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { PricingPolicyThongTinChung } from '../components/pricing/PricingPolicyThongTinChung';
 import { PricingPolicyPhamVi } from '../components/pricing/PricingPolicyPhamVi';
 import { PricingPolicyGia } from '../components/pricing/PricingPolicyGia';
+import { mockPricingPolicies } from '../mockData/pricingPolicies';
 
 class TabErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
   constructor(props: { children: ReactNode }) {
@@ -39,6 +40,10 @@ class TabErrorBoundary extends Component<{ children: ReactNode }, { hasError: bo
 
 export const CreatePricingPolicy: React.FC = () => {
   const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const isEditMode = !!id;
+  const policy = mockPricingPolicies.find(p => p.id === id);
+
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'submitting' | 'submitted'>('idle');
 
@@ -54,7 +59,10 @@ export const CreatePricingPolicy: React.FC = () => {
     setSubmitStatus('submitting');
     setTimeout(() => {
       setSubmitStatus('submitted');
-      setTimeout(() => setSubmitStatus('idle'), 3000);
+      setTimeout(() => {
+        setSubmitStatus('idle');
+        navigate('/pricing-policies');
+      }, 2000);
     }, 800);
   };
 
@@ -62,15 +70,15 @@ export const CreatePricingPolicy: React.FC = () => {
     <main className="flex-1 p-6 w-full overflow-x-hidden flex flex-col">
       {/* Toast */}
       {saveStatus === 'saved' && (
-        <div className="fixed top-20 right-6 z-50 flex items-center gap-3 bg-emerald-600 text-white px-5 py-3 rounded-xl shadow-xl">
+        <div className="fixed top-20 right-6 z-50 flex items-center gap-3 bg-emerald-600 text-white px-5 py-3 rounded-xl shadow-xl animate-in fade-in slide-in-from-top-2">
           <CheckCircle2 className="w-5 h-5 shrink-0" />
-          <span className="font-semibold text-sm">Lưu nháp thành công!</span>
+          <span className="font-semibold text-sm">{isEditMode ? 'Cập nhật nháp thành công!' : 'Lưu nháp thành công!'}</span>
         </div>
       )}
       {submitStatus === 'submitted' && (
-        <div className="fixed top-20 right-6 z-50 flex items-center gap-3 bg-blue-600 text-white px-5 py-3 rounded-xl shadow-xl">
+        <div className="fixed top-20 right-6 z-50 flex items-center gap-3 bg-blue-600 text-white px-5 py-3 rounded-xl shadow-xl animate-in fade-in slide-in-from-top-2">
           <CheckCircle2 className="w-5 h-5 shrink-0" />
-          <span className="font-semibold text-sm">Đã đệ trình chính sách thành công!</span>
+          <span className="font-semibold text-sm">{isEditMode ? 'Cập nhật chính sách thành công!' : 'Đã đệ trình chính sách thành công!'}</span>
         </div>
       )}
       {/* Header */}
@@ -83,7 +91,10 @@ export const CreatePricingPolicy: React.FC = () => {
             <ArrowLeft className="w-4 h-4 text-slate-600" />
           </button>
           <div>
-            <h1 className="text-xl font-bold text-slate-800 leading-tight">Tạo mới Chính sách giá</h1>
+            <h1 className="text-xl font-bold text-slate-800 leading-tight">
+              {isEditMode ? 'Chỉnh sửa Chính sách giá' : 'Tạo mới Chính sách giá'}
+              {policy && <span className="text-slate-400 font-normal ml-2">({policy.code})</span>}
+            </h1>
             <p className="text-sm text-slate-500 mt-0.5">Thiết lập thông tin, phạm vi và bảng giá</p>
           </div>
         </div>
@@ -93,7 +104,7 @@ export const CreatePricingPolicy: React.FC = () => {
             {saveStatus === 'saved' ? 'Đã lưu nháp' : 'Lưu nháp'}
           </Button>
           <Button variant="primary" icon={Send} size="sm" onClick={handleSubmit} isLoading={submitStatus === 'submitting'}>
-            {submitStatus === 'submitted' ? 'Đã đệ trình' : 'Đệ trình'}
+            {submitStatus === 'submitted' ? 'Đang cập nhật' : isEditMode ? 'Cập nhật' : 'Đệ trình'}
           </Button>
         </div>
       </div>
@@ -102,19 +113,19 @@ export const CreatePricingPolicy: React.FC = () => {
       <div className="flex flex-col space-y-5 max-w-[1400px] mx-auto w-full pb-16">
         <TabErrorBoundary>
           <section id="thong-tin-chung">
-            <PricingPolicyThongTinChung />
+            <PricingPolicyThongTinChung policy={policy} />
           </section>
         </TabErrorBoundary>
 
         <TabErrorBoundary>
           <section id="pham-vi">
-            <PricingPolicyPhamVi />
+            <PricingPolicyPhamVi policy={policy} />
           </section>
         </TabErrorBoundary>
 
         <TabErrorBoundary>
           <section id="gia">
-            <PricingPolicyGia />
+            <PricingPolicyGia policy={policy} />
           </section>
         </TabErrorBoundary>
       </div>
