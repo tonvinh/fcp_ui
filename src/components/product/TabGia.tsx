@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Input } from '../ui/Input';
-import { Trash2, Plus, ChevronDown, ChevronUp, Map, FileText, FileBadge, Tag, StickyNote } from 'lucide-react';
+import { Trash2, Plus, ChevronDown, ChevronUp, Map, FileText, FileBadge, Tag, StickyNote, Zap } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
 import { FormattedNumberInput } from '../ui/FormattedNumberInput';
@@ -80,6 +80,8 @@ export const TabGiaConfig: React.FC<TabGiaConfigProps> = ({ serviceOption, baseP
   // Postpaid state — price is always directly editable
   const [postpaidCustomPrice, setPostpaidCustomPrice] = useState<number>(0);
   const [postpaidSubPrices, setPostpaidSubPrices] = useState<Record<string, number>>({});
+
+
   
   useEffect(() => {
     if (isCombo) {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Edit, Copy, ChevronDown, ChevronUp, Map, DollarSign, Package, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Edit, Copy, ChevronDown, ChevronUp, Map, DollarSign, Package, CheckCircle2, LayoutGrid, Eye } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -9,6 +9,7 @@ import { cn } from '../lib/utils';
 export const PricingPolicyDetail: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const [viewMode, setViewMode] = useState<'unified' | 'split'>('unified');
   const [expandedConfigs, setExpandedConfigs] = useState<Record<string, boolean>>({
     config_1: true,
     config_2: false,
@@ -150,7 +151,7 @@ export const PricingPolicyDetail: React.FC = () => {
 
       {/* Price configs — same layout as ProductDetail */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/80 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shadow-sm">
               <DollarSign className="w-4 h-4 text-indigo-600" />
@@ -160,9 +161,38 @@ export const PricingPolicyDetail: React.FC = () => {
               <p className="text-xs text-slate-400 mt-0.5">Chi tiết bảng tính toán cước phí cho từng cấu hình</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="info" className="px-3">{policyDetails.priceConfigs.length} Cấu hình</Badge>
-            <Button variant="outline" size="sm" icon={Edit} onClick={() => navigate(`/pricing-policies/edit/${policyDetails.id}`)}>Sửa giá</Button>
+          <div className="flex flex-wrap items-center gap-4">
+            {/* Lựa chọn xem selector */}
+            <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 shadow-inner">
+              <button
+                onClick={() => setViewMode('unified')}
+                className={cn(
+                  "px-3 py-1.5 rounded-md text-xs font-semibold transition-all duration-200 flex items-center gap-1.5",
+                  viewMode === 'unified'
+                    ? "bg-white text-blue-600 shadow-sm"
+                    : "text-slate-600 hover:text-slate-900"
+                )}
+              >
+                <Eye className="w-3.5 h-3.5" />
+                Xem bảng gộp
+              </button>
+              <button
+                onClick={() => setViewMode('split')}
+                className={cn(
+                  "px-3 py-1.5 rounded-md text-xs font-semibold transition-all duration-200 flex items-center gap-1.5",
+                  viewMode === 'split'
+                    ? "bg-white text-blue-600 shadow-sm"
+                    : "text-slate-600 hover:text-slate-900"
+                )}
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                Xem bảng riêng
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="info" className="px-3">{policyDetails.priceConfigs.length} Cấu hình</Badge>
+              <Button variant="outline" size="sm" icon={Edit} onClick={() => navigate(`/pricing-policies/edit/${policyDetails.id}`)}>Sửa giá</Button>
+            </div>
           </div>
         </div>
 
@@ -222,31 +252,42 @@ export const PricingPolicyDetail: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Price tables per product */}
-                    {config.products.map((productName) => {
-                      const rows = config.tables[productName as keyof typeof config.tables];
-                      if (!rows) return null;
-                      return (
-                        <div key={productName} className="space-y-2.5">
-                          <h3 className="text-xs font-bold text-slate-700 flex items-center gap-2 px-1">
-                            <Package className="w-4 h-4 text-blue-600" />
-                            BẢNG GIÁ: <span className="text-blue-700 uppercase">{productName}</span>
-                            <span className="font-normal text-slate-400">({rows.length} kịch bản)</span>
-                          </h3>
-                          <div className="overflow-x-auto custom-scrollbar border border-slate-200 rounded-lg bg-white shadow-sm">
-                            <table className="w-full text-xs text-left">
-                              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600">
-                                <tr>
-                                  {['Hình thức', 'Chu kỳ', 'Kỳ', 'Đơn giá', 'Tổng giảm', 'Số tháng giảm cước', 'Số tháng khuyến mãi', 'Giá sau giảm', 'Số tháng sử dụng', 'Tổng tiền'].map((h, i) => (
-                                    <th key={h} className={cn('px-3 py-2.5 font-semibold whitespace-nowrap', i >= 7 && 'border-l border-slate-200', i === 4 || i === 5 ? 'text-red-500' : '', i === 6 ? 'text-emerald-600' : '', i === 9 ? 'text-right bg-amber-50 text-amber-700 font-bold uppercase' : i >= 7 ? 'text-right' : i === 2 ? 'text-center' : '')}>
-                                      {h}
-                                    </th>
-                                  ))}
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-slate-100 text-slate-600 font-medium">
-                                {rows.map((row, i) => (
-                                  <tr key={i} className="hover:bg-slate-50 transition-colors">
+                    {/* Price tables */}
+                    {viewMode === 'unified' ? (
+                      <div className="space-y-2.5">
+                        <h3 className="text-xs font-bold text-slate-700 flex items-center gap-2 px-1">
+                          <Package className="w-4 h-4 text-blue-600" />
+                          BẢNG GIÁ GỘP CÁC SẢN PHẨM
+                          <span className="font-normal text-slate-400">
+                            ({config.products.reduce((acc, p) => acc + (config.tables[p as keyof typeof config.tables]?.length || 0), 0)} kịch bản)
+                          </span>
+                        </h3>
+                        <div className="overflow-x-auto custom-scrollbar border border-slate-200 rounded-lg bg-white shadow-sm">
+                          <table className="w-full text-xs text-left">
+                            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600">
+                              <tr>
+                                {['Sản phẩm', 'Hình thức', 'Chu kỳ', 'Kỳ', 'Đơn giá', 'Tổng giảm', 'Số tháng giảm cước', 'Số tháng khuyến mãi', 'Giá sau giảm', 'Số tháng sử dụng', 'Tổng tiền'].map((h, i) => (
+                                  <th key={h} className={cn('px-3 py-2.5 font-semibold whitespace-nowrap', i >= 8 && 'border-l border-slate-200', i === 5 || i === 6 ? 'text-red-500' : '', i === 7 ? 'text-emerald-600' : '', i === 10 ? 'text-right bg-amber-50 text-amber-700 font-bold uppercase' : i >= 8 ? 'text-right' : i === 3 ? 'text-center' : '')}>
+                                    {h}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 text-slate-600 font-medium">
+                              {config.products.flatMap((productName) => {
+                                const rows = config.tables[productName as keyof typeof config.tables] || [];
+                                return rows.map((row, i) => (
+                                  <tr key={`${productName}-${i}`} className="hover:bg-slate-50 transition-colors">
+                                    <td className="px-3 py-2.5">
+                                      <span className={cn(
+                                        "px-2 py-0.5 rounded text-[10px] font-bold shadow-sm uppercase border",
+                                        productName === 'Giga'
+                                          ? "bg-blue-50 text-blue-700 border-blue-200"
+                                          : "bg-purple-50 text-purple-700 border-purple-200"
+                                      )}>
+                                        {productName}
+                                      </span>
+                                    </td>
                                     <td className="px-3 py-2.5 font-semibold text-slate-800">{row.method}</td>
                                     <td className="px-3 py-2.5">{row.cycle}</td>
                                     <td className="px-3 py-2.5 text-center">{row.period}</td>
@@ -258,13 +299,56 @@ export const PricingPolicyDetail: React.FC = () => {
                                     <td className="px-3 py-2.5 text-center border-l border-slate-200 font-bold text-slate-800">{row.usageMonths}</td>
                                     <td className="px-3 py-2.5 text-right border-l border-slate-200 bg-amber-50/50 text-amber-600 font-bold text-sm">{row.total === '-' ? '-' : typeof row.total === 'number' ? row.total.toLocaleString() : row.total}</td>
                                   </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
+                                ));
+                              })}
+                            </tbody>
+                          </table>
                         </div>
-                      );
-                    })}
+                      </div>
+                    ) : (
+                      config.products.map((productName) => {
+                        const rows = config.tables[productName as keyof typeof config.tables];
+                        if (!rows) return null;
+                        return (
+                          <div key={productName} className="space-y-2.5">
+                            <h3 className="text-xs font-bold text-slate-700 flex items-center gap-2 px-1">
+                              <Package className="w-4 h-4 text-blue-600" />
+                              BẢNG GIÁ: <span className="text-blue-700 uppercase">{productName}</span>
+                              <span className="font-normal text-slate-400">({rows.length} kịch bản)</span>
+                            </h3>
+                            <div className="overflow-x-auto custom-scrollbar border border-slate-200 rounded-lg bg-white shadow-sm">
+                              <table className="w-full text-xs text-left">
+                                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600">
+                                  <tr>
+                                    {['Hình thức', 'Chu kỳ', 'Kỳ', 'Đơn giá', 'Tổng giảm', 'Số tháng giảm cước', 'Số tháng khuyến mãi', 'Giá sau giảm', 'Số tháng sử dụng', 'Tổng tiền'].map((h, i) => (
+                                      <th key={h} className={cn('px-3 py-2.5 font-semibold whitespace-nowrap', i >= 7 && 'border-l border-slate-200', i === 4 || i === 5 ? 'text-red-500' : '', i === 6 ? 'text-emerald-600' : '', i === 9 ? 'text-right bg-amber-50 text-amber-700 font-bold uppercase' : i >= 7 ? 'text-right' : i === 2 ? 'text-center' : '')}>
+                                        {h}
+                                      </th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 text-slate-600 font-medium">
+                                  {rows.map((row, i) => (
+                                    <tr key={i} className="hover:bg-slate-50 transition-colors">
+                                      <td className="px-3 py-2.5 font-semibold text-slate-800">{row.method}</td>
+                                      <td className="px-3 py-2.5">{row.cycle}</td>
+                                      <td className="px-3 py-2.5 text-center">{row.period}</td>
+                                      <td className="px-3 py-2.5 text-right">{row.price.toLocaleString()}</td>
+                                      <td className="px-3 py-2.5 text-right text-red-500">{row.discountAmt > 0 ? `-${row.discountAmt.toLocaleString()}` : '0'}</td>
+                                      <td className="px-3 py-2.5 text-center">{row.discountMonths}</td>
+                                      <td className="px-3 py-2.5 text-center text-emerald-600">{row.bonusMonths === '-' ? '-' : Number(row.bonusMonths) > 0 ? `+${row.bonusMonths}` : '0'}</td>
+                                      <td className="px-3 py-2.5 text-right border-l border-slate-200 font-bold text-slate-800">{row.priceAfterDiscount.toLocaleString()}</td>
+                                      <td className="px-3 py-2.5 text-center border-l border-slate-200 font-bold text-slate-800">{row.usageMonths}</td>
+                                      <td className="px-3 py-2.5 text-right border-l border-slate-200 bg-amber-50/50 text-amber-600 font-bold text-sm">{row.total === '-' ? '-' : typeof row.total === 'number' ? row.total.toLocaleString() : row.total}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 )}
               </div>

@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { Eye, Edit, ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react';
+import { Eye, Edit, ChevronLeft, ChevronRight, MoreHorizontal, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '../ui/Badge';
 import type { PricingPolicy, PolicyStatus } from '../../mockData/pricingPolicies';
 
 interface PricingPolicyTableProps {
   policies: PricingPolicy[];
+  onQuickUpdate?: (policy: PricingPolicy) => void;
 }
 
-export const PricingPolicyTable: React.FC<PricingPolicyTableProps> = ({ policies }) => {
+export const PricingPolicyTable: React.FC<PricingPolicyTableProps> = ({ policies, onQuickUpdate }) => {
   const navigate = useNavigate();
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
@@ -98,6 +99,13 @@ export const PricingPolicyTable: React.FC<PricingPolicyTableProps> = ({ policies
                       title="Chỉnh sửa"
                     >
                       <Edit className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => onQuickUpdate?.(policy)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-colors"
+                      title="Cập nhật nhanh"
+                    >
+                      <Zap className="w-4 h-4" />
                     </button>
                     <button className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
                       <MoreHorizontal className="w-4 h-4" />
