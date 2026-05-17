@@ -179,7 +179,7 @@ export const ServicePriceAllocation: React.FC = () => {
         <div className="flex items-center space-x-4">
           <button 
             onClick={() => navigate(-1)}
-            className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-600"
+            className="p-2 bg-white border border-slate-200 hover:bg-slate-50 rounded-full transition-colors shadow-sm"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>

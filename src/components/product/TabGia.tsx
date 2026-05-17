@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Input } from '../ui/Input';
-import { Trash2, Plus, ChevronDown, ChevronUp, Map, FileText, FileBadge } from 'lucide-react';
+import { Trash2, Plus, ChevronDown, ChevronUp, Map, FileText, FileBadge, Tag, StickyNote } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
+import { FormattedNumberInput } from '../ui/FormattedNumberInput';
 
 interface TabGiaConfigProps {
   serviceOption: string;
@@ -11,7 +12,38 @@ interface TabGiaConfigProps {
   billingCycle: string;
 }
 
-const TabGiaConfig: React.FC<TabGiaConfigProps> = ({ serviceOption, basePrice, subPrices, billingCycle }) => {
+const parsePeriods = (input: string): number[] => {
+  const periods = new Set<number>();
+  let normalized = input.toLowerCase()
+    .replace(/từ\s+/g, '')
+    .replace(/\s+đến\s+/g, '-');
+  
+  const parts = normalized.split(',');
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    if (trimmed.includes('-')) {
+      const rangeParts = trimmed.split('-');
+      if (rangeParts.length === 2) {
+        const start = parseInt(rangeParts[0].trim(), 10);
+        const end = parseInt(rangeParts[1].trim(), 10);
+        if (!isNaN(start) && !isNaN(end) && start <= end) {
+          for (let i = start; i <= end; i++) {
+            periods.add(i);
+          }
+        }
+      }
+    } else {
+      const val = parseInt(trimmed, 10);
+      if (!isNaN(val)) {
+        periods.add(val);
+      }
+    }
+  }
+  return Array.from(periods).sort((a, b) => a - b);
+};
+
+export const TabGiaConfig: React.FC<TabGiaConfigProps> = ({ serviceOption, basePrice, subPrices, billingCycle }) => {
   const services = useMemo(() => {
     const s: string[] = [];
     if (serviceOption.includes('Internet')) s.push('Internet');
@@ -23,8 +55,21 @@ const TabGiaConfig: React.FC<TabGiaConfigProps> = ({ serviceOption, basePrice, s
   const isCombo = services.length >= 2;
 
   const isOneTimeAllowed = serviceOption === 'FPT Play Only' || serviceOption === 'Camera';
+  
+  // Trả sau is mandatory for Internet or Combo Internet services
+  const isPostpaidMandatory = serviceOption.includes('Internet');
 
-  const [paymentMethods, setPaymentMethods] = useState<string[]>(isOneTimeAllowed ? ['Một lần'] : ['Trả sau']);
+  const [paymentMethods, setPaymentMethods] = useState<string[]>(() => {
+    const defaultMethods = ['Trả sau'];
+    if (isOneTimeAllowed) defaultMethods.push('Một lần');
+    return defaultMethods;
+  });
+
+  useEffect(() => {
+    if (isPostpaidMandatory && !paymentMethods.includes('Trả sau')) {
+      setPaymentMethods(prev => [...prev, 'Trả sau']);
+    }
+  }, [isPostpaidMandatory]);
 
   useEffect(() => {
     if (!isOneTimeAllowed) {
@@ -32,17 +77,16 @@ const TabGiaConfig: React.FC<TabGiaConfigProps> = ({ serviceOption, basePrice, s
     }
   }, [isOneTimeAllowed]);
 
-  // Postpaid state
-  const [postpaidUseBasePrice, setPostpaidUseBasePrice] = useState(true);
+  // Postpaid state — price is always directly editable
   const [postpaidCustomPrice, setPostpaidCustomPrice] = useState<number>(0);
   const [postpaidSubPrices, setPostpaidSubPrices] = useState<Record<string, number>>({});
   
   useEffect(() => {
-    if (isCombo && !postpaidUseBasePrice) {
+    if (isCombo) {
       const sum = services.reduce((acc, s) => acc + (postpaidSubPrices[s] || 0), 0);
       setPostpaidCustomPrice(sum);
     }
-  }, [postpaidSubPrices, isCombo, postpaidUseBasePrice, services]);
+  }, [postpaidSubPrices, isCombo, services]);
 
   const [postpaidPromos, setPostpaidPromos] = useState([{ discountAmount: 0, subDiscounts: {} as Record<string, number>, discountMonths: 0 }]);
 
@@ -52,24 +96,30 @@ const TabGiaConfig: React.FC<TabGiaConfigProps> = ({ serviceOption, basePrice, s
   const [prepaidSubPrices, setPrepaidSubPrices] = useState<Record<string, number>>({});
 
   useEffect(() => {
+    if (prepaidUseBasePrice) {
+      setPrepaidSubPrices(postpaidSubPrices);
+    }
+  }, [prepaidUseBasePrice, postpaidSubPrices]);
+
+  useEffect(() => {
     if (isCombo && !prepaidUseBasePrice) {
       const sum = services.reduce((acc, s) => acc + (prepaidSubPrices[s] || 0), 0);
       setPrepaidCustomPrice(sum);
     }
   }, [prepaidSubPrices, isCombo, prepaidUseBasePrice, services]);
 
-  const [prepaidMinPeriod, setPrepaidMinPeriod] = useState<number>(6);
-  const [prepaidMaxPeriod, setPrepaidMaxPeriod] = useState<number>(12);
-  const [prepaidPromos, setPrepaidPromos] = useState([{ periodTarget: 'All', discountAmount: 0, subDiscounts: {} as Record<string, number>, discountMonths: 0, bonusMonths: 0 }]);
+  const [prepaidPeriodInput, setPrepaidPeriodInput] = useState<string>('1-12');
+  const [prepaidPromos, setPrepaidPromos] = useState([{ periodTarget: 'All', discountAmount: 0, subDiscounts: {} as Record<string, number>, discountMonths: 0, bonusMonths: 0, validityPeriod: '' as number | '' }]);
 
   const handleTogglePaymentMethod = (method: string) => {
+    if (method === 'Trả sau' && isPostpaidMandatory) return; // cannot toggle off if mandatory
     setPaymentMethods(prev => 
       prev.includes(method) ? prev.filter(m => m !== method) : [...prev, method]
     );
   };
 
-  const getActivePostpaidPrice = () => postpaidUseBasePrice ? basePrice : postpaidCustomPrice;
-  const getActivePrepaidPrice = () => prepaidUseBasePrice ? basePrice : prepaidCustomPrice;
+  const getActivePostpaidPrice = () => postpaidCustomPrice;
+  const getActivePrepaidPrice = () => prepaidUseBasePrice ? getActivePostpaidPrice() : prepaidCustomPrice;
 
   const generateTableRows = () => {
     const rows = [];
@@ -86,7 +136,8 @@ const TabGiaConfig: React.FC<TabGiaConfigProps> = ({ serviceOption, basePrice, s
          bonusMonths: '-',
          priceAfterDiscount: basePrice,
          usageMonths: '-',
-         total: basePrice
+         total: basePrice,
+         validityPeriod: '-'
        });
     }
 
@@ -104,7 +155,8 @@ const TabGiaConfig: React.FC<TabGiaConfigProps> = ({ serviceOption, basePrice, s
            bonusMonths: '-',
            priceAfterDiscount: pPrice,
            usageMonths: '-',
-           total: '-'
+           total: '-',
+           validityPeriod: '-'
          });
        } else {
          postpaidPromos.forEach(promo => {
@@ -119,7 +171,8 @@ const TabGiaConfig: React.FC<TabGiaConfigProps> = ({ serviceOption, basePrice, s
              bonusMonths: '-',
              priceAfterDiscount: pPrice - (promo.discountAmount || 0),
              usageMonths: '-',
-             total: '-'
+             total: '-',
+             validityPeriod: '-'
            });
          });
        }
@@ -127,39 +180,39 @@ const TabGiaConfig: React.FC<TabGiaConfigProps> = ({ serviceOption, basePrice, s
 
     if (paymentMethods.includes('Trả trước')) {
        const pPrice = getActivePrepaidPrice();
-       const min = Number(prepaidMinPeriod) || 0;
-       const max = Number(prepaidMaxPeriod) || 0;
+       const periods = parsePeriods(prepaidPeriodInput);
 
-       if (min > 0 && max >= min) {
-         for (let i = min; i <= max; i++) {
-           const promo = prepaidPromos.find(p => p.periodTarget === String(i)) || 
-                         prepaidPromos.find(p => p.periodTarget === 'All') || 
-                         { discountAmount: 0, subDiscounts: {}, discountMonths: 0, bonusMonths: 0 };
-           
-           const priceAfter = Math.max(0, pPrice - (promo.discountAmount || 0));
-           let total = 0;
-           const effectiveDiscountMonths = Number(promo.discountMonths) || 0;
-           
-           if (effectiveDiscountMonths >= i) {
-             total = i * priceAfter;
-           } else {
-             total = (effectiveDiscountMonths * priceAfter) + ((i - effectiveDiscountMonths) * pPrice);
-           }
-
-           rows.push({
-             method: 'Trả trước',
-             cycle: billingCycle,
-             period: i,
-             price: pPrice,
-             discountAmt: promo.discountAmount || 0,
-             subDiscounts: promo.subDiscounts || {},
-             discountMonths: promo.discountMonths,
-             bonusMonths: promo.bonusMonths,
-             priceAfterDiscount: priceAfter,
-             usageMonths: i + (Number(promo.bonusMonths) || 0),
-             total: total
-           });
+       for (const i of periods) {
+         const promo = prepaidPromos.find(p => {
+           const targetLower = p.periodTarget.toLowerCase().trim();
+           if (targetLower === 'all') return true;
+           return parsePeriods(p.periodTarget).includes(i);
+         }) || { discountAmount: 0, subDiscounts: {}, discountMonths: 0, bonusMonths: 0, validityPeriod: '' as number | '' };
+         
+         const priceAfter = Math.max(0, pPrice - (promo.discountAmount || 0));
+         let total = 0;
+         const effectiveDiscountMonths = Number(promo.discountMonths) || 0;
+         
+         if (effectiveDiscountMonths >= i) {
+           total = i * priceAfter;
+         } else {
+           total = (effectiveDiscountMonths * priceAfter) + ((i - effectiveDiscountMonths) * pPrice);
          }
+
+         rows.push({
+           method: 'Trả trước',
+           cycle: billingCycle,
+           period: i,
+           price: pPrice,
+           discountAmt: promo.discountAmount || 0,
+           subDiscounts: promo.subDiscounts || {},
+           discountMonths: promo.discountMonths,
+           bonusMonths: promo.bonusMonths,
+           priceAfterDiscount: priceAfter,
+           usageMonths: i + (Number(promo.bonusMonths) || 0),
+           total: total,
+           validityPeriod: (promo as any).validityPeriod || ''
+         });
        }
     }
 
@@ -174,13 +227,28 @@ const TabGiaConfig: React.FC<TabGiaConfigProps> = ({ serviceOption, basePrice, s
         <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">Bật Hình thức thanh toán áp dụng</label>
         <div className="flex flex-wrap gap-3 mt-3">
           {['Một lần', 'Trả sau', 'Trả trước'].map(method => {
-            const isDisabled = method === 'Một lần' && !isOneTimeAllowed;
+            const isDisabledOneTime = method === 'Một lần' && !isOneTimeAllowed;
+            const isDisabledPostpaid = method === 'Trả sau' && isPostpaidMandatory;
+            const isDisabled = isDisabledOneTime;
+            const isMandatory = isDisabledPostpaid;
+            const title = isDisabledOneTime
+              ? 'Chỉ áp dụng cho FPT Play Only hoặc Camera'
+              : isMandatory
+              ? 'Bắt buộc đối với dịch vụ Internet'
+              : '';
             return (
-            <label key={method} title={isDisabled ? "Chỉ áp dụng cho FPT Play Only hoặc Camera" : ""} className={cn("flex items-center space-x-2 bg-slate-50 border border-slate-200 px-4 py-2 rounded-lg transition-all", isDisabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-slate-100 shadow-sm hover:border-blue-300")}>
-              <input type="checkbox" checked={paymentMethods.includes(method)} disabled={isDisabled} onChange={() => handleTogglePaymentMethod(method)} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 disabled:opacity-50" />
-              <span className="text-sm font-bold text-slate-700">{method}</span>
-            </label>
-          )})}
+              <label key={method} title={title} className={cn(
+                'flex items-center space-x-2 bg-slate-50 border border-slate-200 px-4 py-2 rounded-lg transition-all',
+                isDisabled ? 'opacity-50 cursor-not-allowed' :
+                isMandatory ? 'cursor-not-allowed border-amber-300 bg-amber-50' :
+                'cursor-pointer hover:bg-slate-100 shadow-sm hover:border-blue-300'
+              )}>
+                <input type="checkbox" checked={paymentMethods.includes(method)} disabled={isDisabled || isMandatory} onChange={() => handleTogglePaymentMethod(method)} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 disabled:opacity-50" />
+                <span className={cn('text-sm font-bold', isMandatory ? 'text-amber-700' : 'text-slate-700')}>{method}</span>
+                {isMandatory && <span className="text-[10px] font-bold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded uppercase">Bắt buộc</span>}
+              </label>
+            );
+          })}
         </div>
       </div>
 
@@ -197,76 +265,102 @@ const TabGiaConfig: React.FC<TabGiaConfigProps> = ({ serviceOption, basePrice, s
         {paymentMethods.includes('Trả sau') && (
           <div className="bg-white p-4 border border-slate-200 border-l-4 border-l-amber-500 rounded-xl shadow-sm space-y-3">
              <h4 className="font-bold text-slate-800 text-sm">Cấu hình Trả sau</h4>
-             <div className="flex gap-4 items-start max-w-xl mb-2">
-                <div className="flex-1 space-y-2">
-                  <Input 
-                    label={`Giá bán trả sau ${isCombo && !postpaidUseBasePrice ? '(Tổng)' : ''}`}
-                    type="number" 
-                    value={getActivePostpaidPrice()} 
-                    onChange={e => !isCombo && setPostpaidCustomPrice(Number(e.target.value))} 
-                    readOnly={postpaidUseBasePrice || isCombo}
-                    className={postpaidUseBasePrice || isCombo ? "bg-slate-50 text-slate-700 font-bold" : ""}
+              <div className="max-w-xl mb-2 space-y-2">
+                <div className="w-full space-y-1.5">
+                  <label className="block text-sm font-medium text-slate-700">
+                    Giá bán trả sau {isCombo ? '(Tổng)' : ''}
+                  </label>
+                  <FormattedNumberInput
+                    value={postpaidCustomPrice || 0}
+                    onChange={val => !isCombo && setPostpaidCustomPrice(val)}
+                    readOnly={isCombo}
+                    className={cn(
+                      "flex h-9 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm !text-left placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-fpt-orange/30 focus:border-fpt-orange disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 transition-all font-semibold",
+                      isCombo ? "bg-slate-50 text-slate-700 font-bold" : "text-slate-900"
+                    )}
+                    placeholder="Nhập giá bán trả sau..."
                   />
-                  {isCombo && !postpaidUseBasePrice && (
-                    <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 space-y-1.5">
-                       <p className="text-[11px] font-semibold uppercase text-slate-500 mb-1">Cấu thành đơn giá trả sau</p>
-                       {services.map(s => (
-                         <div key={s} className="flex items-center space-x-2">
-                            <label className="text-xs font-medium text-slate-700 w-20 truncate">{s}</label>
-                            <input type="number" className="flex-1 border border-slate-300 rounded px-2 py-1 text-xs focus:ring-amber-500 focus:border-amber-500" value={postpaidSubPrices[s] || ''} onChange={(e) => setPostpaidSubPrices({...postpaidSubPrices, [s]: Number(e.target.value)})} placeholder="VNĐ" />
-                         </div>
-                       ))}
-                    </div>
-                  )}
                 </div>
-                <label className="flex items-center space-x-2 mt-7 cursor-pointer">
-                  <input type="checkbox" checked={postpaidUseBasePrice} onChange={(e) => setPostpaidUseBasePrice(e.target.checked)} className="w-4 h-4 rounded text-blue-600" />
-                  <span className="text-xs font-medium text-slate-700">Lấy theo đơn giá cơ bản</span>
-                </label>
-             </div>
-             <div>
-                <div className="flex justify-between items-center mb-2 mt-4">
-                   <label className="block text-xs font-bold text-slate-700 uppercase">Khuyến mãi trả sau</label>
-                   <Button variant="outline" size="sm" onClick={() => setPostpaidPromos([...postpaidPromos, {discountAmount: 0, subDiscounts: {}, discountMonths: 0}])}>Thêm dòng</Button>
+                {isCombo && (
+                  <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 space-y-1.5">
+                    <p className="text-[11px] font-semibold uppercase text-slate-500 mb-1">Cấu thành đơn giá trả sau</p>
+                    {services.map(s => (
+                      <div key={s} className="flex items-center space-x-2">
+                        <label className="text-xs font-medium text-slate-700 w-20 truncate">{s}</label>
+                        <FormattedNumberInput className="flex-1 border border-slate-300 rounded px-2 py-1 text-xs focus:ring-amber-500 focus:border-amber-500 !text-left font-semibold" value={postpaidSubPrices[s] || 0} onChange={(val) => setPostpaidSubPrices({...postpaidSubPrices, [s]: val})} placeholder="VNĐ" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div>
+                <div className="mb-2 mt-4">
+                  <label className="block text-xs font-bold text-slate-700 uppercase">Khuyến mãi trả sau</label>
                 </div>
-                <div className="border border-slate-200 rounded-lg overflow-x-auto">
-                   <table className="w-full text-xs text-left">
-                     <thead className="bg-slate-50 text-slate-600 border-b">
-                       <tr>
-                         {isCombo ? services.map(s => <th key={s} className="px-3 py-2 font-medium">Giảm ({s})</th>) : <th className="px-3 py-2 font-medium">Số tiền giảm</th>}
-                         {isCombo && <th className="px-3 py-2 font-bold text-blue-600">Tổng giảm</th>}
-                         <th className="px-3 py-2 font-medium">Số tháng áp dụng</th>
-                         <th className="px-3 py-2 w-10"></th>
-                       </tr>
-                     </thead>
-                     <tbody className="divide-y divide-slate-100">
-                       {postpaidPromos.map((p, idx) => (
-                         <tr key={idx} className="bg-white">
-                            {isCombo ? services.map(s => (
-                              <td key={s} className="px-2 py-1.5">
-                                <input type="number" className="w-24 border rounded px-2 py-1 text-xs" value={p.subDiscounts[s] || ''} 
-                                  onChange={e => {
-                                    const n = [...postpaidPromos]; 
-                                    if(!n[idx].subDiscounts) n[idx].subDiscounts = {};
-                                    n[idx].subDiscounts[s] = Number(e.target.value);
-                                    n[idx].discountAmount = Object.values(n[idx].subDiscounts).reduce((a,b)=>a+b,0);
-                                    setPostpaidPromos(n);
-                                  }} 
-                                />
-                              </td>
-                            )) : (
-                              <td className="px-2 py-1.5"><input type="number" className="w-32 border rounded px-2 py-1 text-xs" value={p.discountAmount || ''} onChange={(e) => { const n = [...postpaidPromos]; n[idx].discountAmount = Number(e.target.value); setPostpaidPromos(n); }} /></td>
+                <div className="border border-slate-200 rounded-lg overflow-hidden">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-slate-50 text-slate-600 border-b">
+                      <tr>
+                        <th className="px-3 py-2 font-semibold">Số tiền giảm</th>
+                        {isCombo && <th className="px-3 py-2 font-bold text-blue-600 bg-slate-50/50 w-28 text-center">Tổng giảm</th>}
+                        <th className="px-3 py-2 font-semibold w-36 text-center">Số tháng giảm cước</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {postpaidPromos.map((p, idx) => (
+                        <tr key={idx} className="bg-white">
+                          <td className="px-3 py-2">
+                            {isCombo ? (
+                              <div className="flex flex-wrap gap-4 py-1">
+                                {services.map(s => (
+                                  <div key={s} className="flex items-center space-x-2">
+                                    <span className="text-[11px] font-semibold text-slate-500">{s}:</span>
+                                    <FormattedNumberInput 
+                                      className="w-24 border rounded px-2 py-1 text-xs !text-left font-semibold focus:ring-1 focus:ring-blue-500 focus:border-blue-500" 
+                                      value={p.subDiscounts[s] || 0}
+                                      onChange={val => {
+                                        const n = [...postpaidPromos];
+                                        if(!n[idx].subDiscounts) n[idx].subDiscounts = {};
+                                        n[idx].subDiscounts[s] = val;
+                                        n[idx].discountAmount = Object.values(n[idx].subDiscounts).reduce((a,b)=>a+b,0);
+                                        setPostpaidPromos(n);
+                                      }}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <FormattedNumberInput 
+                                className="w-32 border rounded px-2 py-1 text-xs !text-left font-semibold focus:ring-1 focus:ring-blue-500 focus:border-blue-500" 
+                                value={p.discountAmount || 0} 
+                                onChange={(val) => { 
+                                  const n = [...postpaidPromos]; 
+                                  n[idx].discountAmount = val; 
+                                  setPostpaidPromos(n); 
+                                }} 
+                              />
                             )}
-                            {isCombo && <td className="px-3 py-1.5 font-bold text-blue-600 bg-slate-50 text-center">{p.discountAmount}</td>}
-                            <td className="px-2 py-1.5"><input type="number" className="w-24 border rounded px-2 py-1 text-xs" value={p.discountMonths || ''} onChange={(e) => { const n = [...postpaidPromos]; n[idx].discountMonths = Number(e.target.value); setPostpaidPromos(n); }} /></td>
-                            <td className="px-2 py-1.5 text-center text-red-500 cursor-pointer hover:bg-slate-50" onClick={() => setPostpaidPromos(postpaidPromos.filter((_, i) => i !== idx))}><Trash2 className="w-3.5 h-3.5 mx-auto" /></td>
-                         </tr>
-                       ))}
-                     </tbody>
-                   </table>
+                          </td>
+                          {isCombo && <td className="px-3 py-2 font-bold text-blue-600 bg-slate-50/50 text-center text-sm">{p.discountAmount ? p.discountAmount.toLocaleString() : '0'}</td>}
+                          <td className="px-3 py-2 text-center">
+                            <input 
+                              type="number" 
+                              className="w-24 border rounded px-2 py-1 text-xs text-center" 
+                              value={p.discountMonths || ''} 
+                              onChange={(e) => { 
+                                const n = [...postpaidPromos]; 
+                                n[idx].discountMonths = Number(e.target.value); 
+                                setPostpaidPromos(n); 
+                              }} 
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-             </div>
-          </div>
+              </div>
+           </div>
         )}
 
         {paymentMethods.includes('Trả trước') && (
@@ -275,21 +369,27 @@ const TabGiaConfig: React.FC<TabGiaConfigProps> = ({ serviceOption, basePrice, s
              
              <div className="flex gap-4 items-start max-w-xl mb-2">
                 <div className="flex-1 space-y-2">
-                  <Input 
-                    label={`Giá bán trả trước ${isCombo && !prepaidUseBasePrice ? '(Tổng)' : ''}`}
-                    type="number" 
-                    value={getActivePrepaidPrice()} 
-                    onChange={e => !isCombo && setPrepaidCustomPrice(Number(e.target.value))} 
-                    readOnly={prepaidUseBasePrice || isCombo}
-                    className={prepaidUseBasePrice || isCombo ? "bg-slate-50 text-slate-700 font-bold" : ""}
-                  />
+                  <div className="w-full space-y-1.5">
+                    <label className="block text-sm font-medium text-slate-700">
+                      Giá bán trả trước {isCombo && !prepaidUseBasePrice ? '(Tổng)' : ''}
+                    </label>
+                    <FormattedNumberInput
+                      value={getActivePrepaidPrice()}
+                      onChange={val => !isCombo && setPrepaidCustomPrice(val)}
+                      readOnly={prepaidUseBasePrice || isCombo}
+                      className={cn(
+                        "flex h-9 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm !text-left placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-fpt-orange/30 focus:border-fpt-orange disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 transition-all font-semibold",
+                        prepaidUseBasePrice || isCombo ? "bg-slate-50 text-slate-700 font-bold" : "text-slate-900"
+                      )}
+                    />
+                  </div>
                   {isCombo && !prepaidUseBasePrice && (
                     <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 space-y-1.5">
                        <p className="text-[11px] font-semibold uppercase text-slate-500 mb-1">Cấu thành đơn giá trả trước</p>
                        {services.map(s => (
                          <div key={s} className="flex items-center space-x-2">
                             <label className="text-xs font-medium text-slate-700 w-20 truncate">{s}</label>
-                            <input type="number" className="flex-1 border border-slate-300 rounded px-2 py-1 text-xs focus:ring-blue-500 focus:border-blue-500" value={prepaidSubPrices[s] || ''} onChange={(e) => setPrepaidSubPrices({...prepaidSubPrices, [s]: Number(e.target.value)})} placeholder="VNĐ" />
+                            <FormattedNumberInput className="flex-1 border border-slate-300 rounded px-2 py-1 text-xs focus:ring-blue-500 focus:border-blue-500 !text-left font-semibold" value={prepaidSubPrices[s] || 0} onChange={(val) => setPrepaidSubPrices({...prepaidSubPrices, [s]: val})} placeholder="VNĐ" />
                          </div>
                        ))}
                     </div>
@@ -297,125 +397,183 @@ const TabGiaConfig: React.FC<TabGiaConfigProps> = ({ serviceOption, basePrice, s
                 </div>
                 <label className="flex items-center space-x-2 mt-7 cursor-pointer">
                   <input type="checkbox" checked={prepaidUseBasePrice} onChange={(e) => setPrepaidUseBasePrice(e.target.checked)} className="w-4 h-4 rounded text-blue-600" />
-                  <span className="text-xs font-medium text-slate-700">Lấy theo đơn giá cơ bản</span>
+                  <span className="text-xs font-medium text-slate-700">Lấy theo giá trả sau</span>
                 </label>
              </div>
 
-             <div className="grid grid-cols-2 gap-4 pt-3 border-t border-slate-100 max-w-lg">
-                <div className="flex space-x-2 items-center">
-                   <div className="flex-1">
-                     <Input label="Số kỳ tối thiểu" type="number" value={prepaidMinPeriod} onChange={e=>setPrepaidMinPeriod(Number(e.target.value))} />
-                   </div>
-                   <span className="text-slate-500 mt-6 text-xs">/ {billingCycle.toLowerCase()}</span>
-                </div>
-                <div className="flex space-x-2 items-center">
-                   <div className="flex-1">
-                     <Input label="Số kỳ tối đa" type="number" value={prepaidMaxPeriod} onChange={e=>setPrepaidMaxPeriod(Number(e.target.value))} />
-                   </div>
-                   <span className="text-slate-500 mt-6 text-xs">/ {billingCycle.toLowerCase()}</span>
-                </div>
+             <div className="pt-3 border-t border-slate-100 max-w-xl">
+               <Input 
+                 label="Chu kỳ trả trước áp dụng (tháng)" 
+                 value={prepaidPeriodInput} 
+                 onChange={e => setPrepaidPeriodInput(e.target.value)} 
+                 placeholder="VD: 1-12 (từ tháng 1 đến 12), 6 (tháng 6), 6,7,8 (tháng 6,7,8)..."
+               />
+               <p className="text-[11px] text-slate-500 mt-1.5 leading-relaxed">
+                 Hỗ trợ cấu hình linh động: Khoảng tháng (ví dụ: <strong className="text-slate-700">1-12</strong> hoặc <strong className="text-slate-700">Từ 1 đến 12</strong>) hoặc các tháng cụ thể (ví dụ: <strong className="text-slate-700">6,7,8</strong>). Hệ thống sẽ tự động gộp các tháng trùng lặp và sắp xếp theo thứ tự tăng dần.
+               </p>
              </div>
 
-             <div className="mt-3 pt-3 border-t border-slate-100">
-                <div className="flex justify-between items-center mb-2">
-                   <label className="block text-xs font-bold text-slate-700 uppercase">Khuyến mãi linh hoạt từng kỳ</label>
-                   <Button variant="outline" size="sm" onClick={() => setPrepaidPromos([...prepaidPromos, {periodTarget: 'All', discountAmount: 0, subDiscounts: {}, discountMonths: 0, bonusMonths: 0}])}>Thêm dòng</Button>
-                </div>
-                <div className="border border-slate-200 rounded-lg overflow-x-auto">
-                   <table className="w-full text-xs text-left whitespace-nowrap">
-                     <thead className="bg-slate-50 text-slate-600 border-b">
-                       <tr>
-                         <th className="px-3 py-2 font-medium">Kỳ áp dụng</th>
-                         {isCombo ? services.map(s => <th key={s} className="px-3 py-2 font-medium">Giảm ({s})</th>) : <th className="px-3 py-2 font-medium">Cước phí giảm</th>}
-                         {isCombo && <th className="px-3 py-2 font-bold text-blue-600">Tổng giảm</th>}
-                         <th className="px-3 py-2 font-medium">Tháng AD</th>
-                         <th className="px-3 py-2 font-medium">Tháng tặng</th>
-                         <th className="px-3 py-2 w-10"></th>
-                       </tr>
-                     </thead>
-                     <tbody className="divide-y divide-slate-100">
-                       {prepaidPromos.map((p, idx) => (
-                         <tr key={idx} className="bg-white">
-                            <td className="px-2 py-1.5">
-                               <input type="text" placeholder="VD: 6, All" className="w-16 border rounded px-2 py-1 text-xs text-center" value={p.periodTarget} onChange={(e) => { const n = [...prepaidPromos]; n[idx].periodTarget = e.target.value; setPrepaidPromos(n); }} />
-                            </td>
-                            {isCombo ? services.map(s => (
-                              <td key={s} className="px-2 py-1.5">
-                                <input type="number" className="w-20 border rounded px-2 py-1 text-xs" value={p.subDiscounts[s] || ''} 
-                                  onChange={e => {
+              <div className="mt-3 pt-3 border-t border-slate-100">
+                 <div className="flex justify-between items-center mb-2">
+                    <label className="block text-xs font-bold text-slate-700 uppercase">Khuyến mãi linh hoạt theo tháng trả trước</label>
+                    <Button variant="outline" size="sm" onClick={() => setPrepaidPromos([...prepaidPromos, {periodTarget: 'All', discountAmount: 0, subDiscounts: {}, discountMonths: 0, bonusMonths: 0, validityPeriod: ''}])}>Thêm dòng</Button>
+                 </div>
+                 <p className="text-[11px] text-slate-500 mb-2 leading-relaxed">
+                   💡 <strong>Hướng dẫn nhập Tháng trả trước:</strong> Nhập tháng lẻ (VD: <strong className="text-slate-700">6</strong>), danh sách tháng (VD: <strong className="text-slate-700">6,7,8</strong>), dải tháng (VD: <strong className="text-slate-700">1-12</strong> hoặc <strong className="text-slate-700">Từ 1 đến 12</strong>) hoặc <strong className="text-slate-700">All</strong>.
+                 </p>
+                  <div className="border border-slate-200 rounded-lg overflow-hidden">
+                     <table className="w-full text-xs text-left">
+                       <thead className="bg-slate-50 text-slate-600 border-b">
+                         <tr>
+                           <th className="px-3 py-2 font-semibold w-36">Tháng trả trước</th>
+                           <th className="px-3 py-2 font-semibold">Số tiền giảm</th>
+                           {isCombo && <th className="px-3 py-2 font-bold text-blue-600 bg-slate-50/50 w-28 text-center">Tổng giảm</th>}
+                           <th className="px-3 py-2 font-semibold w-32 text-center">Số tháng giảm cước</th>
+                           <th className="px-3 py-2 font-semibold w-36 text-center">Số tháng khuyến mãi</th>
+                           <th className="px-3 py-2 font-semibold w-40 text-center">Thời hạn áp dụng</th>
+                           <th className="px-3 py-2 w-10"></th>
+                         </tr>
+                       </thead>
+                       <tbody className="divide-y divide-slate-100">
+                         {prepaidPromos.map((p, idx) => (
+                           <tr key={idx} className="bg-white">
+                              <td className="px-3 py-2">
+                                 <input type="text" placeholder="VD: 1-12, 6, All" className="w-28 border border-slate-300 rounded px-2 py-1 text-xs text-center font-medium focus:ring-1 focus:ring-blue-500 focus:border-blue-500" value={p.periodTarget} onChange={(e) => { const n = [...prepaidPromos]; n[idx].periodTarget = e.target.value; setPrepaidPromos(n); }} />
+                              </td>
+                              <td className="px-3 py-2">
+                                {isCombo ? (
+                                  <div className="flex flex-wrap gap-4 py-1">
+                                    {services.map(s => (
+                                      <div key={s} className="flex items-center space-x-2">
+                                        <span className="text-[11px] font-semibold text-slate-500">{s}:</span>
+                                        <FormattedNumberInput className="w-20 border rounded px-2 py-1 text-xs !text-left font-semibold focus:ring-1 focus:ring-blue-500 focus:border-blue-500" value={p.subDiscounts[s] || 0} 
+                                          onChange={val => {
+                                            const n = [...prepaidPromos]; 
+                                            if(!n[idx].subDiscounts) n[idx].subDiscounts = {};
+                                            n[idx].subDiscounts[s] = val;
+                                            n[idx].discountAmount = Object.values(n[idx].subDiscounts).reduce((a,b)=>a+b,0);
+                                            setPrepaidPromos(n);
+                                          }} 
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <FormattedNumberInput className="w-32 border rounded px-2 py-1 text-xs !text-left font-semibold focus:ring-1 focus:ring-blue-500 focus:border-blue-500" value={p.discountAmount || 0} onChange={(val) => { const n = [...prepaidPromos]; n[idx].discountAmount = val; setPrepaidPromos(n); }} />
+                                )}
+                              </td>
+                              {isCombo && <td className="px-3 py-2 font-bold text-blue-600 bg-slate-50/50 text-center text-sm">{p.discountAmount ? p.discountAmount.toLocaleString() : '0'}</td>}
+                              <td className="px-3 py-2 text-center">
+                                <input type="number" className="w-24 border rounded px-2 py-1 text-xs text-center focus:ring-1 focus:ring-blue-500 focus:border-blue-500" value={p.discountMonths || ''} onChange={(e) => { const n = [...prepaidPromos]; n[idx].discountMonths = Number(e.target.value); setPrepaidPromos(n); }} />
+                              </td>
+                              <td className="px-3 py-2 text-center">
+                                <input type="number" className="w-24 border rounded px-2 py-1 text-xs text-center focus:ring-1 focus:ring-blue-500 focus:border-blue-500" value={p.bonusMonths || ''} onChange={(e) => { const n = [...prepaidPromos]; n[idx].bonusMonths = Number(e.target.value); setPrepaidPromos(n); }} />
+                              </td>
+                              <td className="px-3 py-2 text-center">
+                                <input 
+                                  type="number" 
+                                  className="w-32 border border-slate-300 rounded px-2 py-1 text-xs text-center focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-medium" 
+                                  placeholder="Số tháng (VD: 24)"
+                                  value={p.validityPeriod || ''} 
+                                  onChange={(e) => { 
                                     const n = [...prepaidPromos]; 
-                                    if(!n[idx].subDiscounts) n[idx].subDiscounts = {};
-                                    n[idx].subDiscounts[s] = Number(e.target.value);
-                                    n[idx].discountAmount = Object.values(n[idx].subDiscounts).reduce((a,b)=>a+b,0);
-                                    setPrepaidPromos(n);
+                                    n[idx].validityPeriod = e.target.value ? Number(e.target.value) : ''; 
+                                    setPrepaidPromos(n); 
                                   }} 
                                 />
                               </td>
-                            )) : (
-                              <td className="px-2 py-1.5"><input type="number" className="w-24 border rounded px-2 py-1 text-xs" value={p.discountAmount || ''} onChange={(e) => { const n = [...prepaidPromos]; n[idx].discountAmount = Number(e.target.value); setPrepaidPromos(n); }} /></td>
-                            )}
-                            {isCombo && <td className="px-3 py-1.5 font-bold text-blue-600 bg-slate-50 text-center">{p.discountAmount}</td>}
-                            
-                            <td className="px-2 py-1.5"><input type="number" className="w-16 border rounded px-2 py-1 text-xs text-center" value={p.discountMonths || ''} onChange={(e) => { const n = [...prepaidPromos]; n[idx].discountMonths = Number(e.target.value); setPrepaidPromos(n); }} /></td>
-                            <td className="px-2 py-1.5"><input type="number" className="w-16 border rounded px-2 py-1 text-xs text-center" value={p.bonusMonths || ''} onChange={(e) => { const n = [...prepaidPromos]; n[idx].bonusMonths = Number(e.target.value); setPrepaidPromos(n); }} /></td>
-                            <td className="px-2 py-1.5 text-center text-red-500 cursor-pointer hover:bg-slate-50" onClick={() => setPrepaidPromos(prepaidPromos.filter((_, i) => i !== idx))}><Trash2 className="w-3.5 h-3.5 mx-auto" /></td>
-                         </tr>
-                       ))}
-                     </tbody>
-                   </table>
-                </div>
-             </div>
+                              <td className="px-3 py-2 text-center">
+                                <button 
+                                  type="button"
+                                  onClick={() => setPrepaidPromos(prepaidPromos.filter((_, i) => i !== idx))}
+                                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                  title="Xóa dòng"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5 mx-auto" />
+                                </button>
+                              </td>
+                           </tr>
+                         ))}
+                       </tbody>
+                     </table>
+                  </div>
+              </div>
           </div>
         )}
       </div>
 
       {paymentMethods.length > 0 && (
-         <div className="bg-slate-800 text-white rounded-xl shadow-lg border border-slate-700 overflow-hidden mt-6">
-           <div className="px-4 py-3 border-b border-slate-700 flex justify-between items-center bg-slate-800/80">
-             <h3 className="font-bold text-sm text-slate-100">BẢNG TÍNH TOÁN KẾT QUẢ</h3>
-           </div>
-           <div className="overflow-x-auto custom-scrollbar">
-             <table className="w-full text-xs text-left">
-               <thead className="bg-slate-900 border-b border-slate-700">
-                 <tr>
-                   <th className="px-3 py-2 font-medium whitespace-nowrap">Hình thức</th>
-                   <th className="px-3 py-2 font-medium whitespace-nowrap">Chu kỳ</th>
-                   <th className="px-3 py-2 font-medium text-center whitespace-nowrap">Kỳ</th>
-                   <th className="px-3 py-2 font-medium text-right whitespace-nowrap">Đơn giá</th>
-                   {isCombo && services.map(s => <th key={s} className="px-3 py-2 font-medium text-right whitespace-nowrap text-red-300">Giảm ({s})</th>)}
-                   <th className="px-3 py-2 font-medium text-right whitespace-nowrap text-red-400">Tổng giảm</th>
-                   <th className="px-3 py-2 font-medium text-center whitespace-nowrap text-red-400">Tháng AD giảm</th>
-                   <th className="px-3 py-2 font-medium text-center whitespace-nowrap text-emerald-400">Tháng tặng</th>
-                   <th className="px-3 py-2 font-medium text-right whitespace-nowrap border-l border-slate-700">Giá sau giảm</th>
-                   <th className="px-3 py-2 font-medium text-center whitespace-nowrap border-l border-slate-700">Tháng SD</th>
-                   <th className="px-3 py-2 font-medium text-right whitespace-nowrap border-l border-slate-700 bg-amber-500/10 text-amber-300 uppercase">Tổng tiền</th>
-                 </tr>
-               </thead>
-               <tbody className="divide-y divide-slate-700/50 text-slate-300 font-medium">
-                 {calculatedRows.map((row, i) => (
-                   <tr key={i} className="hover:bg-slate-700/50 transition-colors">
-                     <td className="px-3 py-2 text-white">{row.method}</td>
-                     <td className="px-3 py-2">{row.cycle}</td>
-                     <td className="px-3 py-2 text-center">{row.period}</td>
-                     <td className="px-3 py-2 text-right">{row.price.toLocaleString()}</td>
-                     {isCombo && services.map(s => <td key={s} className="px-3 py-2 text-right text-red-300">{(row.subDiscounts[s] || 0) > 0 ? `-${(row.subDiscounts[s] || 0).toLocaleString()}` : '0'}</td>)}
-                     <td className="px-3 py-2 text-right text-red-400">-{row.discountAmt.toLocaleString()}</td>
-                     <td className="px-3 py-2 text-center">{row.discountMonths}</td>
-                     <td className="px-3 py-2 text-center text-emerald-400">{row.bonusMonths !== '-' ? `+${row.bonusMonths}` : '-'}</td>
-                     <td className="px-3 py-2 text-right border-l border-slate-700 text-white">{row.priceAfterDiscount.toLocaleString()}</td>
-                     <td className="px-3 py-2 text-center border-l border-slate-700 font-bold">{row.usageMonths}</td>
-                     <td className="px-3 py-2 text-right border-l border-slate-700 bg-amber-500/5 text-amber-400 font-bold text-sm">
-                       {row.total === '-' ? '-' : row.total.toLocaleString()}
-                     </td>
-                   </tr>
-                 ))}
-                 {calculatedRows.length === 0 && (
-                   <tr><td colSpan={isCombo ? 11 + services.length : 11} className="px-4 py-6 text-center text-slate-500 italic">Chưa có thông tin</td></tr>
-                 )}
-               </tbody>
-             </table>
-           </div>
-         </div>
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-6">
+          <div className="px-4 py-3 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+            <h3 className="font-bold text-sm text-slate-700 uppercase tracking-wide">Bảng tính toán kết quả</h3>
+          </div>
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-xs text-left">
+              <thead className="bg-slate-50 text-slate-600 border-b">
+                <tr>
+                  <th className="px-3 py-2.5 font-semibold whitespace-nowrap w-24">Hình thức</th>
+                  <th className="px-3 py-2.5 font-semibold whitespace-nowrap w-20">Chu kỳ</th>
+                  <th className="px-3 py-2.5 font-semibold text-center whitespace-nowrap w-16">Kỳ</th>
+                  <th className="px-3 py-2.5 font-semibold text-right whitespace-nowrap w-28">Đơn giá</th>
+                  <th className="px-3 py-2.5 font-semibold text-right whitespace-nowrap text-red-600 w-32">Khuyến mãi giảm cước</th>
+                  <th className="px-3 py-2.5 font-semibold text-center whitespace-nowrap text-red-600 w-36">Số tháng giảm cước</th>
+                  <th className="px-3 py-2.5 font-semibold text-center whitespace-nowrap text-emerald-600 w-36">Số tháng khuyến mãi</th>
+                  <th className="px-3 py-2.5 font-semibold text-right whitespace-nowrap border-l border-slate-200 w-28">Giá sau giảm</th>
+                  <th className="px-3 py-2.5 font-semibold text-center whitespace-nowrap border-l border-slate-200 w-28">Số tháng sử dụng</th>
+                  <th className="px-3 py-2.5 font-semibold text-center whitespace-nowrap border-l border-slate-200 w-36">Thời hạn áp dụng</th>
+                  <th className="px-3 py-2.5 font-semibold text-right whitespace-nowrap border-l border-slate-200 bg-amber-50/50 text-amber-700 uppercase w-32">Tổng tiền</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-600 font-medium">
+                {calculatedRows.map((row, i) => (
+                  <tr key={i} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-3 py-2.5 font-bold text-slate-800">{row.method}</td>
+                    <td className="px-3 py-2.5">{row.cycle}</td>
+                    <td className="px-3 py-2.5 text-center">{row.period}</td>
+                    <td className="px-3 py-2.5 text-right">{row.price.toLocaleString()}</td>
+                    <td className="px-3 py-2.5 text-right text-red-500">
+                      {row.discountAmt > 0 ? (
+                        <div className="flex flex-col items-end">
+                          <div className="font-semibold text-red-600">
+                            -{row.discountAmt.toLocaleString()}
+                          </div>
+                          {isCombo && (
+                            <div className="text-[9px] text-slate-400 mt-0.5 leading-normal flex flex-wrap gap-1 justify-end font-normal">
+                              {services.map(s => {
+                                const amt = row.subDiscounts[s] || 0;
+                                if (amt <= 0) return null;
+                                return (
+                                  <span key={s} className="bg-slate-100 px-1 py-0.5 rounded text-[9px] text-slate-500 border border-slate-200/50">
+                                    {s}: -{amt.toLocaleString()}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 font-normal">-</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 text-center text-red-500">{row.discountMonths}</td>
+                    <td className="px-3 py-2.5 text-center text-emerald-600">{row.bonusMonths === '-' ? '-' : Number(row.bonusMonths) > 0 ? `+${row.bonusMonths}` : '0'}</td>
+                    <td className="px-3 py-2.5 text-right border-l border-slate-200 font-bold text-slate-800">{row.priceAfterDiscount.toLocaleString()}</td>
+                    <td className="px-3 py-2.5 text-center border-l border-slate-200 font-bold text-slate-800">{row.usageMonths}</td>
+                    <td className="px-3 py-2.5 text-center border-l border-slate-200 font-semibold text-slate-600">
+                      {row.validityPeriod && row.validityPeriod !== '-' ? `${row.validityPeriod} tháng` : '-'}
+                    </td>
+                    <td className="px-3 py-2.5 text-right border-l border-slate-200 bg-amber-50/50 text-amber-600 font-bold text-sm">
+                      {row.total === '-' ? '-' : row.total.toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+                {calculatedRows.length === 0 && (
+                  <tr><td colSpan={11} className="px-4 py-8 text-center text-slate-400 italic">Chưa có thông tin — hãy cấu hình các thông số bên trên</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -426,7 +584,7 @@ interface ConfigState {
   name: string;
 }
 
-export const TabGia: React.FC<{ serviceOption?: string }> = ({ serviceOption = '' }) => {
+export const TabGia: React.FC<{ serviceOption?: string; hideBasicParams?: boolean }> = ({ serviceOption = '', hideBasicParams = false }) => {
   const [configs, setConfigs] = useState<ConfigState[]>([{ id: 'config_1', name: 'Cấu hình giá mặc định' }]);
   const [expandedConfigs, setExpandedConfigs] = useState<Record<string, boolean>>({ 'config_1': true });
 
@@ -478,48 +636,31 @@ export const TabGia: React.FC<{ serviceOption?: string }> = ({ serviceOption = '
   return (
     <div className="space-y-6">
       {/* Thông số cơ bản (Global for Product) */}
-      <div className="bg-white p-5 border border-slate-200 rounded-xl shadow-sm space-y-4">
-        <h3 className="font-bold text-slate-800 text-base border-b pb-2">Thông số cơ bản</h3>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <Input 
-            label="Giá hiển thị" 
-            placeholder="Khoảng giá..." 
-            value={displayPrice}
-            onChange={e => setDisplayPrice(e.target.value)}
-          />
-          
-          <div className="space-y-2 col-span-2 lg:col-span-1">
-             {isCombo ? (
-                <div className="space-y-2">
-                  <Input label="Đơn giá cơ bản (Tổng)" type="number" value={basePrice} readOnly className="bg-slate-50 border-slate-300 font-bold text-blue-700" />
-                  <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 space-y-1.5">
-                     <p className="text-[11px] font-semibold uppercase text-slate-500 mb-1">Cấu thành đơn giá</p>
-                     {services.map(s => (
-                       <div key={s} className="flex items-center space-x-2">
-                          <label className="text-xs font-medium text-slate-700 w-20 truncate" title={s}>{s}</label>
-                          <input type="number" className="flex-1 border border-slate-300 rounded px-2 py-1 text-sm focus:ring-blue-500 focus:border-blue-500" value={subPrices[s] || ''} onChange={(e) => setSubPrices({...subPrices, [s]: Number(e.target.value)})} placeholder="VNĐ" />
-                       </div>
-                     ))}
-                  </div>
-                </div>
-             ) : (
-                <Input label="Đơn giá cơ bản" type="number" value={basePrice || ''} onChange={(e) => setBasePrice(Number(e.target.value))} placeholder="VNĐ" />
-             )}
-          </div>
+      {!hideBasicParams && (
+        <div className="bg-white p-5 border border-slate-200 rounded-xl shadow-sm space-y-4">
+          <h3 className="font-bold text-slate-800 text-base border-b pb-2">Thông số cơ bản</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">
+            <Input
+              label="Giá hiển thị"
+              placeholder="Khoảng giá..."
+              value={displayPrice}
+              onChange={e => setDisplayPrice(e.target.value)}
+            />
 
-          <div className="space-y-1.5 col-span-2 lg:col-span-2">
-            <label className="block text-xs font-medium text-slate-700">Chu kỳ thanh toán</label>
-            <div className="flex bg-slate-100 p-1 rounded-md border border-slate-200 h-9 items-center max-w-[200px]">
-               {['Tháng'].map((c) => (
-                  <label key={c} className={cn("flex-1 text-center py-1 rounded text-xs cursor-pointer transition-colors", billingCycle === c ? "bg-white shadow-sm font-bold text-blue-700" : "text-slate-600 hover:text-slate-900")}>
-                    <input type="radio" name="cycle" className="sr-only" checked={billingCycle === c} onChange={() => setBillingCycle(c)} />
-                    {c}
-                  </label>
-               ))}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium text-slate-700">Chu kỳ thanh toán</label>
+              <div className="flex bg-slate-100 p-1 rounded-md border border-slate-200 h-9 items-center max-w-[200px]">
+                 {['Tháng'].map((c) => (
+                    <label key={c} className={cn("flex-1 text-center py-1 rounded text-xs cursor-pointer transition-colors", billingCycle === c ? "bg-white shadow-sm font-bold text-blue-700" : "text-slate-600 hover:text-slate-900")}>
+                      <input type="radio" name="cycle" className="sr-only" checked={billingCycle === c} onChange={() => setBillingCycle(c)} />
+                      {c}
+                    </label>
+                 ))}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
         <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex items-center justify-between shrink-0">

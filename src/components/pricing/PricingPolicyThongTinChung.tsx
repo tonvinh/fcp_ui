@@ -159,8 +159,8 @@ export const PricingPolicyThongTinChung: React.FC = () => {
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-      <div className="bg-blue-600 px-6 py-4 flex items-center space-x-2">
-        <h2 className="text-lg font-bold text-white">Thông tin chung</h2>
+      <div className="bg-[#0D214F] px-6 py-4 flex items-center space-x-2">
+        <h2 className="text-base font-bold text-white">Thông tin chung</h2>
       </div>
       
       <div className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-8">

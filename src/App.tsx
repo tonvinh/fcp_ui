@@ -9,6 +9,7 @@ import { PricingPolicyList } from './pages/PricingPolicyList';
 import { CreatePricingPolicy } from './pages/CreatePricingPolicy';
 import { PricingPolicyDetail } from './pages/PricingPolicyDetail';
 import { ServicePriceAllocation } from './pages/ServicePriceAllocation';
+import { NotFound } from './pages/NotFound';
 
 function App() {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -27,6 +28,7 @@ function App() {
             <Route path="/pricing-policies/create" element={<CreatePricingPolicy />} />
             <Route path="/pricing-policies/:id" element={<PricingPolicyDetail />} />
             <Route path="/settings/price-allocation" element={<ServicePriceAllocation />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </div>
       </div>
