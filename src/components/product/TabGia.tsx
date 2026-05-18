@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Input } from '../ui/Input';
-import { Trash2, Plus, ChevronDown, ChevronUp, Map, FileText, FileBadge, Tag, StickyNote, Zap } from 'lucide-react';
+import { Trash2, Plus, Minus, ChevronDown, ChevronUp, Map, FileText, FileBadge, Tag, StickyNote, Zap } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
 import { FormattedNumberInput } from '../ui/FormattedNumberInput';
@@ -53,6 +53,7 @@ export const TabGiaConfig: React.FC<TabGiaConfigProps> = ({ serviceOption, baseP
     return s;
   }, [serviceOption]);
   const isCombo = services.length >= 2;
+  const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({});
 
   const isOneTimeAllowed = serviceOption === 'FPT Play Only' || serviceOption === 'Camera';
   
@@ -112,6 +113,41 @@ export const TabGiaConfig: React.FC<TabGiaConfigProps> = ({ serviceOption, baseP
 
   const [prepaidPeriodInput, setPrepaidPeriodInput] = useState<string>('1-12');
   const [prepaidPromos, setPrepaidPromos] = useState([{ periodTarget: 'All', discountAmount: 0, subDiscounts: {} as Record<string, number>, discountMonths: 0, bonusMonths: 0, validityPeriod: '' as number | '' }]);
+
+  const { duplicates, duplicateRows } = useMemo(() => {
+    const monthToRows: Record<number, number[]> = {};
+    const periods = parsePeriods(prepaidPeriodInput);
+    
+    prepaidPromos.forEach((p, idx) => {
+      const target = p.periodTarget.toLowerCase().trim();
+      if (!target) return;
+      if (target === 'all') {
+        periods.forEach(m => {
+          if (!monthToRows[m]) monthToRows[m] = [];
+          monthToRows[m].push(idx);
+        });
+      } else {
+        const ms = parsePeriods(p.periodTarget);
+        ms.forEach(m => {
+          if (!monthToRows[m]) monthToRows[m] = [];
+          monthToRows[m].push(idx);
+        });
+      }
+    });
+    
+    const duplicates: Record<number, number[]> = {};
+    const duplicateRows = new Set<number>();
+    
+    Object.entries(monthToRows).forEach(([monthStr, rowIndices]) => {
+      if (rowIndices.length > 1) {
+        const m = Number(monthStr);
+        duplicates[m] = rowIndices;
+        rowIndices.forEach(r => duplicateRows.add(r));
+      }
+    });
+    
+    return { duplicates, duplicateRows };
+  }, [prepaidPromos, prepaidPeriodInput]);
 
   const handleTogglePaymentMethod = (method: string) => {
     if (method === 'Trả sau' && isPostpaidMandatory) return; // cannot toggle off if mandatory
@@ -219,6 +255,141 @@ export const TabGiaConfig: React.FC<TabGiaConfigProps> = ({ serviceOption, baseP
     }
 
     return rows;
+  };
+
+  const formatK = (val: number) => {
+    if (val === 0) return '0';
+    const kVal = Math.abs(val) > 1000 ? val / 1000 : val;
+    return Math.round(kVal).toString();
+  };
+
+  const getPriceStatement = (row: any) => {
+    const activeSubPrices = prepaidUseBasePrice ? postpaidSubPrices : prepaidSubPrices;
+    const serviceStatements = services.map(s => {
+      const sOriginal = (services.length === 1) 
+        ? (row.method === 'Trả trước' ? getActivePrepaidPrice() : getActivePostpaidPrice()) 
+        : (activeSubPrices[s] || postpaidSubPrices[s] || 0);
+        
+      const sDiscount = (services.length === 1) 
+        ? row.discountAmt 
+        : (row.subDiscounts?.[s] || 0);
+        
+      const sAfter = Math.max(0, sOriginal - sDiscount);
+      
+      if (row.method === 'Trả trước') {
+        const bonus = Number(row.bonusMonths) || 0;
+        const periodVal = Number(row.period) || 0;
+        const discMonths = Number(row.discountMonths) || 0;
+        const sTotal = (discMonths * sAfter) + ((periodVal - discMonths) * sOriginal);
+        
+        return `Dịch vụ ${s} trả trước ${row.period} tháng khuyến mãi ${bonus} tháng có tổng tiền phải trả là ${formatK(sTotal)}k được sử dụng ${row.usageMonths} tháng`;
+      } else if (row.method === 'Trả sau') {
+        const discMonths = Number(row.discountMonths) || 0;
+        if (discMonths > 0) {
+          return `Dịch vụ ${s} trả sau có giá cước là ${formatK(sOriginal)}k/tháng, giảm cước ${formatK(sDiscount)}k/tháng trong ${row.discountMonths} tháng, giá sau giảm là ${formatK(sAfter)}k/tháng`;
+        } else {
+          return `Dịch vụ ${s} trả sau có giá cước là ${formatK(sOriginal)}k/tháng`;
+        }
+      } else {
+        return `Dịch vụ ${s} thanh toán một lần với tổng số tiền là ${formatK(sOriginal)}k`;
+      }
+    });
+
+    let statement = serviceStatements.join(', ');
+
+    if (row.method === 'Trả trước') {
+      const primaryService = services[0] || 'Internet';
+      const regularPostpaidPrice = (services.length === 1) ? getActivePostpaidPrice() : (postpaidSubPrices[primaryService] || 0);
+      const validityVal = row.validityPeriod && row.validityPeriod !== '-' ? row.validityPeriod : row.usageMonths;
+      
+      statement += `, thời hạn áp dụng giảm là ${validityVal} Tháng, sau thời hạn giảm cước là ${formatK(regularPostpaidPrice)}k/tháng`;
+    }
+
+    return statement;
+  };
+
+  const getSubProductNames = () => {
+    return services.map(s => {
+      if (s === 'Internet') {
+        if (serviceOption.toLowerCase().includes('sky')) return 'Sky';
+        if (serviceOption.toLowerCase().includes('meta')) return 'Meta';
+        return 'Giga';
+      }
+      if (s === 'FPT Play') {
+        if (serviceOption.toLowerCase().includes('vip')) return 'VIP';
+        if (serviceOption.toLowerCase().includes('max')) return 'MAX';
+        return 'VIP';
+      }
+      if (s === 'Camera') return 'Camera';
+      return s;
+    });
+  };
+
+  const getSingleServiceSummary = (row: any, s: string) => {
+    const activeSubPrices = prepaidUseBasePrice ? postpaidSubPrices : prepaidSubPrices;
+    const sOriginal = (services.length === 1) 
+      ? (row.method === 'Trả trước' ? getActivePrepaidPrice() : getActivePostpaidPrice()) 
+      : (activeSubPrices[s] || postpaidSubPrices[s] || 0);
+      
+    const sDiscount = (services.length === 1) 
+      ? row.discountAmt 
+      : (row.subDiscounts?.[s] || 0);
+      
+    const sAfter = Math.max(0, sOriginal - sDiscount);
+    const shortName = s === 'Internet' ? 'Basic Net' : s === 'FPT Play' ? 'Basic FPT Play' : s === 'Camera' ? 'Basic Camera' : s;
+
+    if (row.method === 'Trả trước') {
+      const periodVal = Number(row.period) || 0;
+      const discMonths = Number(row.discountMonths) || 0;
+      const sTotal = (discMonths * sAfter) + ((periodVal - discMonths) * sOriginal);
+      
+      return `${shortName} ${row.usageMonths}T ${formatK(sTotal)}k/${row.usageMonths}T`;
+    } else if (row.method === 'Trả sau') {
+      return `${shortName} Trả sau ${formatK(sOriginal)}k/T`;
+    } else {
+      return `${shortName} Một lần ${formatK(sOriginal)}k`;
+    }
+  };
+
+  const getPriceSummary = (row: any) => {
+    const activeSubPrices = prepaidUseBasePrice ? postpaidSubPrices : prepaidSubPrices;
+    const serviceSummaries = services.map(s => {
+      const sOriginal = (services.length === 1) 
+        ? (row.method === 'Trả trước' ? getActivePrepaidPrice() : getActivePostpaidPrice()) 
+        : (activeSubPrices[s] || postpaidSubPrices[s] || 0);
+        
+      const sDiscount = (services.length === 1) 
+        ? row.discountAmt 
+        : (row.subDiscounts?.[s] || 0);
+        
+      const sAfter = Math.max(0, sOriginal - sDiscount);
+      
+      const shortName = s === 'Internet' ? 'Basic Net' : s === 'FPT Play' ? 'Basic FPT Play' : s === 'Camera' ? 'Basic Camera' : s;
+
+      if (row.method === 'Trả trước') {
+        const periodVal = Number(row.period) || 0;
+        const discMonths = Number(row.discountMonths) || 0;
+        const sTotal = (discMonths * sAfter) + ((periodVal - discMonths) * sOriginal);
+        
+        return `${shortName} ${row.usageMonths}T ${formatK(sTotal)}k/${row.usageMonths}T`;
+      } else if (row.method === 'Trả sau') {
+        return `${shortName} Trả sau ${formatK(sOriginal)}k/T`;
+      } else {
+        return `${shortName} Một lần ${formatK(sOriginal)}k`;
+      }
+    });
+
+    let summary = serviceSummaries.join(', ');
+
+    if (row.method === 'Trả trước') {
+      const primaryService = services[0] || 'Internet';
+      const regularPostpaidPrice = (services.length === 1) ? getActivePostpaidPrice() : (postpaidSubPrices[primaryService] || 0);
+      const hanVal = row.validityPeriod && row.validityPeriod !== '-' ? row.validityPeriod : row.usageMonths;
+      
+      summary += `/Han${hanVal}T cuoc ${formatK(regularPostpaidPrice)}k/1T`;
+    }
+
+    return summary;
   };
 
   const calculatedRows = generateTableRows();
@@ -423,6 +594,14 @@ export const TabGiaConfig: React.FC<TabGiaConfigProps> = ({ serviceOption, baseP
                  <p className="text-[11px] text-slate-500 mb-2 leading-relaxed">
                    💡 <strong>Hướng dẫn nhập Tháng trả trước:</strong> Nhập tháng lẻ (VD: <strong className="text-slate-700">6</strong>), danh sách tháng (VD: <strong className="text-slate-700">6,7,8</strong>), dải tháng (VD: <strong className="text-slate-700">1-12</strong> hoặc <strong className="text-slate-700">Từ 1 đến 12</strong>) hoặc <strong className="text-slate-700">All</strong>.
                  </p>
+                 {Object.keys(duplicates).length > 0 && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-xs font-semibold flex items-center gap-2 mb-3 shadow-sm animate-in fade-in slide-in-from-top-1">
+                      <span className="text-sm select-none">⚠️</span>
+                      <div>
+                        <strong className="text-red-800">Trùng lặp cấu hình:</strong> Tháng <strong className="text-red-900 bg-red-100 px-1 py-0.5 rounded">{Object.keys(duplicates).join(', ')}</strong> bị cấu hình trùng ở nhiều dòng. Vui lòng kiểm tra lại!
+                      </div>
+                    </div>
+                 )}
                   <div className="border border-slate-200 rounded-lg overflow-hidden">
                      <table className="w-full text-xs text-left">
                        <thead className="bg-slate-50 text-slate-600 border-b">
@@ -432,7 +611,7 @@ export const TabGiaConfig: React.FC<TabGiaConfigProps> = ({ serviceOption, baseP
                            {isCombo && <th className="px-3 py-2 font-bold text-blue-600 bg-slate-50/50 w-28 text-center">Tổng giảm</th>}
                            <th className="px-3 py-2 font-semibold w-32 text-center">Số tháng giảm cước</th>
                            <th className="px-3 py-2 font-semibold w-36 text-center">Số tháng khuyến mãi</th>
-                           <th className="px-3 py-2 font-semibold w-40 text-center">Thời hạn áp dụng</th>
+                           <th className="px-3 py-2 font-semibold w-40 text-center">Thời hạn giá</th>
                            <th className="px-3 py-2 w-10"></th>
                          </tr>
                        </thead>
@@ -440,7 +619,22 @@ export const TabGiaConfig: React.FC<TabGiaConfigProps> = ({ serviceOption, baseP
                          {prepaidPromos.map((p, idx) => (
                            <tr key={idx} className="bg-white">
                               <td className="px-3 py-2">
-                                 <input type="text" placeholder="VD: 1-12, 6, All" className="w-28 border border-slate-300 rounded px-2 py-1 text-xs text-center font-medium focus:ring-1 focus:ring-blue-500 focus:border-blue-500" value={p.periodTarget} onChange={(e) => { const n = [...prepaidPromos]; n[idx].periodTarget = e.target.value; setPrepaidPromos(n); }} />
+                                 <input 
+                                   type="text" 
+                                   placeholder="VD: 1-12, 6, All" 
+                                   className={cn(
+                                     "w-28 border rounded px-2 py-1 text-xs text-center font-semibold transition-all",
+                                     duplicateRows.has(idx) 
+                                       ? "border-red-400 focus:ring-2 focus:ring-red-200 focus:border-red-500 bg-red-50 text-red-950 font-bold shadow-sm" 
+                                       : "border-slate-300 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                   )} 
+                                   value={p.periodTarget} 
+                                   onChange={(e) => { 
+                                     const n = [...prepaidPromos]; 
+                                     n[idx].periodTarget = e.target.value; 
+                                     setPrepaidPromos(n); 
+                                   }} 
+                                 />
                               </td>
                               <td className="px-3 py-2">
                                 {isCombo ? (
@@ -513,64 +707,142 @@ export const TabGiaConfig: React.FC<TabGiaConfigProps> = ({ serviceOption, baseP
             <table className="w-full text-xs text-left">
               <thead className="bg-slate-50 text-slate-600 border-b">
                 <tr>
-                  <th className="px-3 py-2.5 font-semibold whitespace-nowrap w-24">Hình thức</th>
-                  <th className="px-3 py-2.5 font-semibold whitespace-nowrap w-20">Chu kỳ</th>
+                  <th className="px-3 py-2.5 font-semibold whitespace-nowrap w-44">Sản phẩm</th>
+                  <th className="px-3 py-2.5 font-semibold whitespace-nowrap w-24">Hình thức TT</th>
+                  <th className="px-3 py-2.5 font-semibold whitespace-nowrap w-20">Chu kỳ tính</th>
                   <th className="px-3 py-2.5 font-semibold text-center whitespace-nowrap w-16">Kỳ</th>
+                  <th className="px-3 py-2.5 font-semibold text-center whitespace-nowrap text-red-600 w-36">Số tháng khuyến mãi</th>
+                  <th className="px-3 py-2.5 font-semibold text-center whitespace-nowrap text-emerald-600 w-28">Số tháng SD</th>
                   <th className="px-3 py-2.5 font-semibold text-right whitespace-nowrap w-28">Đơn giá</th>
-                  <th className="px-3 py-2.5 font-semibold text-right whitespace-nowrap text-red-600 w-32">Khuyến mãi giảm cước</th>
+                  <th className="px-3 py-2.5 font-semibold text-right whitespace-nowrap text-red-600 w-32">Tổng tiền giảm</th>
                   <th className="px-3 py-2.5 font-semibold text-center whitespace-nowrap text-red-600 w-36">Số tháng giảm cước</th>
-                  <th className="px-3 py-2.5 font-semibold text-center whitespace-nowrap text-emerald-600 w-36">Số tháng khuyến mãi</th>
-                  <th className="px-3 py-2.5 font-semibold text-right whitespace-nowrap border-l border-slate-200 w-28">Giá sau giảm</th>
-                  <th className="px-3 py-2.5 font-semibold text-center whitespace-nowrap border-l border-slate-200 w-28">Số tháng sử dụng</th>
-                  <th className="px-3 py-2.5 font-semibold text-center whitespace-nowrap border-l border-slate-200 w-36">Thời hạn áp dụng</th>
-                  <th className="px-3 py-2.5 font-semibold text-right whitespace-nowrap border-l border-slate-200 bg-amber-50/50 text-amber-700 uppercase w-32">Tổng tiền</th>
+                  <th className="px-3 py-2.5 font-semibold text-right whitespace-nowrap border-l border-slate-200 w-32">Giá 1T sau giảm</th>
+                  <th className="px-3 py-2.5 font-semibold text-center whitespace-nowrap border-l border-slate-200 w-36">Thời hạn giá</th>
+                  <th className="px-3 py-2.5 font-semibold text-right whitespace-nowrap border-l border-slate-200 bg-amber-50/50 text-amber-700 uppercase w-36">TỔNG TIỀN (sau giảm)</th>
+                  <th className="px-3 py-2.5 font-semibold whitespace-nowrap border-l border-slate-200 min-w-[280px]">Câu lệnh giá</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-600 font-medium">
-                {calculatedRows.map((row, i) => (
-                  <tr key={i} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-3 py-2.5 font-bold text-slate-800">{row.method}</td>
-                    <td className="px-3 py-2.5">{row.cycle}</td>
-                    <td className="px-3 py-2.5 text-center">{row.period}</td>
-                    <td className="px-3 py-2.5 text-right">{row.price.toLocaleString()}</td>
-                    <td className="px-3 py-2.5 text-right text-red-500">
-                      {row.discountAmt > 0 ? (
-                        <div className="flex flex-col items-end">
-                          <div className="font-semibold text-red-600">
-                            -{row.discountAmt.toLocaleString()}
-                          </div>
-                          {isCombo && (
-                            <div className="text-[9px] text-slate-400 mt-0.5 leading-normal flex flex-wrap gap-1 justify-end font-normal">
-                              {services.map(s => {
-                                const amt = row.subDiscounts[s] || 0;
-                                if (amt <= 0) return null;
-                                return (
-                                  <span key={s} className="bg-slate-100 px-1 py-0.5 rounded text-[9px] text-slate-500 border border-slate-200/50">
-                                    {s}: -{amt.toLocaleString()}
-                                  </span>
-                                );
-                              })}
+                {calculatedRows.map((row, i) => {
+                  const hasChildren = isCombo;
+                  const isExpanded = !!expandedRows[i];
+                  
+                  return (
+                    <React.Fragment key={i}>
+                      <tr className="hover:bg-slate-50 transition-colors">
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center gap-2">
+                            {hasChildren && (
+                              <button
+                                type="button"
+                                onClick={() => setExpandedRows(prev => ({ ...prev, [i]: !prev[i] }))}
+                                className={cn(
+                                  "w-5 h-5 flex items-center justify-center rounded border border-slate-300 bg-white hover:bg-slate-100 hover:border-slate-400 transition-all text-slate-500 hover:text-slate-800"
+                                )}
+                              >
+                                {isExpanded ? (
+                                  <Minus className="w-3 h-3 stroke-[2.5]" />
+                                ) : (
+                                  <Plus className="w-3 h-3 stroke-[2.5]" />
+                                )}
+                              </button>
+                            )}
+                            <div className="flex flex-col text-slate-800">
+                              <span className="font-bold text-slate-850 leading-tight">
+                                {services.join(', ')}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                                {getSubProductNames().join(', ')}
+                              </span>
                             </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5 font-bold text-slate-800">{row.method}</td>
+                        <td className="px-3 py-2.5">{row.cycle}</td>
+                        <td className="px-3 py-2.5 text-center">{row.period}</td>
+                        <td className="px-3 py-2.5 text-center text-red-500 font-bold">
+                          {row.bonusMonths === '-' ? '-' : Number(row.bonusMonths) > 0 ? `+${row.bonusMonths}` : '0'}
+                        </td>
+                        <td className="px-3 py-2.5 text-center font-bold text-slate-800">{row.usageMonths}</td>
+                        <td className="px-3 py-2.5 text-right font-semibold text-slate-700">{row.price.toLocaleString()}</td>
+                        <td className="px-3 py-2.5 text-right text-red-500 font-bold">
+                          {row.discountAmt > 0 ? (
+                            <span className="font-semibold text-red-600">
+                              -{row.discountAmt.toLocaleString()}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 font-normal">-</span>
                           )}
-                        </div>
-                      ) : (
-                        <span className="text-slate-400 font-normal">-</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2.5 text-center text-red-500">{row.discountMonths}</td>
-                    <td className="px-3 py-2.5 text-center text-emerald-600">{row.bonusMonths === '-' ? '-' : Number(row.bonusMonths) > 0 ? `+${row.bonusMonths}` : '0'}</td>
-                    <td className="px-3 py-2.5 text-right border-l border-slate-200 font-bold text-slate-800">{row.priceAfterDiscount.toLocaleString()}</td>
-                    <td className="px-3 py-2.5 text-center border-l border-slate-200 font-bold text-slate-800">{row.usageMonths}</td>
-                    <td className="px-3 py-2.5 text-center border-l border-slate-200 font-semibold text-slate-600">
-                      {row.validityPeriod && row.validityPeriod !== '-' ? `${row.validityPeriod} tháng` : '-'}
-                    </td>
-                    <td className="px-3 py-2.5 text-right border-l border-slate-200 bg-amber-50/50 text-amber-600 font-bold text-sm">
-                      {row.total === '-' ? '-' : row.total.toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
+                        </td>
+                        <td className="px-3 py-2.5 text-center text-red-500 font-bold">{row.discountMonths}</td>
+                        <td className="px-3 py-2.5 text-right border-l border-slate-200 font-bold text-slate-800 bg-slate-50/20">{row.priceAfterDiscount.toLocaleString()}</td>
+                        <td className="px-3 py-2.5 text-center border-l border-slate-200 font-semibold text-slate-600">
+                          {row.validityPeriod && row.validityPeriod !== '-' ? `${row.validityPeriod} tháng` : '-'}
+                        </td>
+                        <td className="px-3 py-2.5 text-right border-l border-slate-200 bg-amber-50/50 text-amber-600 font-bold text-sm">
+                          {row.total === '-' ? '-' : row.total.toLocaleString()}
+                        </td>
+                        <td className="px-3 py-2.5 border-l border-slate-200">
+                          <div className="font-bold text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-100/60 px-2.5 py-1 rounded inline-block font-mono select-all whitespace-normal break-words max-w-sm">
+                            {getPriceSummary(row)}
+                          </div>
+                        </td>
+                      </tr>
+
+                      {/* Expanded Sub-rows */}
+                      {isExpanded && services.map((s, sIdx) => {
+                        const activeSubPrices = prepaidUseBasePrice ? postpaidSubPrices : prepaidSubPrices;
+                        const sOriginal = activeSubPrices[s] || postpaidSubPrices[s] || 0;
+                        const sDiscount = row.subDiscounts?.[s] || 0;
+                        const sAfter = Math.max(0, sOriginal - sDiscount);
+                        
+                        let sTotal: any = '-';
+                        if (row.method === 'Trả trước') {
+                          const periodVal = Number(row.period) || 0;
+                          const discMonths = Number(row.discountMonths) || 0;
+                          sTotal = (discMonths * sAfter) + ((periodVal - discMonths) * sOriginal);
+                        } else if (row.method === 'Một lần') {
+                          sTotal = sOriginal;
+                        }
+
+                        const subProdName = getSubProductNames()[sIdx] || s;
+
+                        return (
+                          <tr key={`${i}_sub_${s}`} className="bg-slate-50/40 hover:bg-slate-100/40 transition-colors text-slate-500 font-medium border-l-2 border-indigo-500/40">
+                            <td className="px-3 py-2 pl-9 font-semibold text-slate-600 flex items-center gap-1.5">
+                              <span className="text-slate-400">↳</span>
+                              <span>{subProdName}</span>
+                            </td>
+                            <td className="px-3 py-2 opacity-80">{row.method}</td>
+                            <td className="px-3 py-2 opacity-80">{row.cycle}</td>
+                            <td className="px-3 py-2 text-center opacity-80">{row.period}</td>
+                            <td className="px-3 py-2 text-center text-emerald-600/80">{row.bonusMonths === '-' ? '-' : Number(row.bonusMonths) > 0 ? `+${row.bonusMonths}` : '0'}</td>
+                            <td className="px-3 py-2 text-center opacity-80">{row.usageMonths}</td>
+                            <td className="px-3 py-2 text-right opacity-90">{sOriginal.toLocaleString()}</td>
+                            <td className="px-3 py-2 text-right text-red-500/80">
+                              {sDiscount > 0 ? `-${sDiscount.toLocaleString()}` : '-'}
+                            </td>
+                            <td className="px-3 py-2 text-center opacity-80">{row.discountMonths}</td>
+                            <td className="px-3 py-2 text-right border-l border-slate-200 opacity-90">{sAfter.toLocaleString()}</td>
+                            <td className="px-3 py-2 text-center border-l border-slate-200 opacity-80">
+                              {row.validityPeriod && row.validityPeriod !== '-' ? `${row.validityPeriod} tháng` : '-'}
+                            </td>
+                            <td className="px-3 py-2 text-right border-l border-slate-200 bg-amber-50/10 text-amber-600/90 font-semibold">
+                              {sTotal === '-' ? '-' : sTotal.toLocaleString()}
+                            </td>
+                            <td className="px-3 py-2 border-l border-slate-200">
+                              <div className="text-[10px] text-indigo-600/90 bg-indigo-50/50 border border-indigo-100/40 px-2 py-0.5 rounded inline-block font-mono select-all">
+                                {getSingleServiceSummary(row, s)}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </React.Fragment>
+                  );
+                })}
                 {calculatedRows.length === 0 && (
-                  <tr><td colSpan={11} className="px-4 py-8 text-center text-slate-400 italic">Chưa có thông tin — hãy cấu hình các thông số bên trên</td></tr>
+                  <tr><td colSpan={13} className="px-4 py-8 text-center text-slate-400 italic">Chưa có thông tin — hãy cấu hình các thông số bên trên</td></tr>
                 )}
               </tbody>
             </table>
